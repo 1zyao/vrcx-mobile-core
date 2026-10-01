@@ -12,6 +12,6 @@ pub use error::{Error, Result};
 pub use group_order::{GroupOrderSource, UnavailableGroupOrderSource};
 pub use profile::RuntimeHostProfile;
 pub use state::{
-    BackendRuntimeCombinedSnapshot, CliLoginPrompt, CliTwoFactorChoice, RuntimeHostOptions,
-    RuntimeHostState, RuntimeHostStateBuilder,
+    BackendRuntimeCombinedSnapshot, CliLoginPrompt, CliTwoFactorChoice, RemoteSyncHost,
+    RemoteSyncSettings, RuntimeHostOptions, RuntimeHostState, RuntimeHostStateBuilder,
 };
