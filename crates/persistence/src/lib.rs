@@ -34,6 +34,7 @@ pub mod screenshot_favorites;
 pub mod secrets;
 pub mod social_aggregates;
 pub mod storage;
+pub mod sync;
 pub mod worlds;
 
 pub mod maintenance {

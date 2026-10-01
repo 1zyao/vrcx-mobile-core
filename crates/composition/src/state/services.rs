@@ -162,6 +162,7 @@ impl RuntimeHostState {
                 });
             });
         self.profile_backup.start_scheduler();
+        Arc::clone(&self.remote_sync_host).start_auto();
     }
 }
 
