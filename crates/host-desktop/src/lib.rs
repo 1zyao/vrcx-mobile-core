@@ -14,8 +14,12 @@ pub mod linux_registry;
 pub mod local_player_moderations;
 pub mod local_test_avatars;
 pub mod log_scanner;
+<<<<<<< HEAD
 pub mod media_session;
 pub mod osc_udp;
+=======
+pub mod machine;
+>>>>>>> a4615601b (feat(sync): observable cycles, device presence and push-driven status)
 #[cfg(any(windows, target_os = "linux"))]
 pub mod overlay_notifications;
 pub mod process_status;
