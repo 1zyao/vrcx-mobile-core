@@ -9,6 +9,7 @@ import { useDataDirMigrationStore } from '@/state/dataDirMigrationStore';
 import { useProfileBackupStore } from '@/state/profileBackupStore';
 import { useRuntimeStore } from '@/state/runtimeStore';
 import { useSessionStore } from '@/state/sessionStore';
+import { useSyncStatusStore } from '@/state/syncStatusStore';
 
 import { handleAppLauncherSnapshotEvent } from './appLauncherSnapshotService';
 import {
@@ -161,6 +162,11 @@ function handleRuntimeEvent(event: RuntimeEvent): void {
 
     if (event.name === 'profileBackupStatus') {
         useProfileBackupStore.getState().applyStatus(event.payload);
+        return;
+    }
+
+    if (event.name === 'syncStatusChanged') {
+        useSyncStatusStore.getState().apply(event.payload);
         return;
     }
 
@@ -524,6 +530,7 @@ export async function bindRuntimeEvents(): Promise<() => void> {
         'printsAutoCleanup',
         'profileBackupStatus',
         'profileRestoreProgress',
+        'syncStatusChanged',
         'dataDirMigration',
         'favoriteImportStatus',
         'favoritesChanged',
