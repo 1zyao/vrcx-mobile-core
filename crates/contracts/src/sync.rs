@@ -238,6 +238,14 @@ pub fn is_config_key_syncable(normalized_key: &str) -> bool {
 /// Remote schema generation for the sync protocol itself.
 pub const SYNC_PROTOCOL_SCHEMA_VERSION: i64 = 1;
 
+/// Collector roles advertised in `_sync_devices.role`.
+///
+/// `auto` participates in the election (yields to a fresh `forced` peer
+/// and to any fresh `auto` peer with a smaller device id); `forced`
+/// always collects.
+pub const DEVICE_ROLE_AUTO: &str = "auto";
+pub const DEVICE_ROLE_FORCED: &str = "forced";
+
 /// The synced-table catalog. Credentials, entity caches, screenshot index and
 /// derived activity read-models are deliberately absent: caches are
 /// recomputed per device, `avatar_history` is derived from `avatar_wear_log`
@@ -710,6 +718,16 @@ pub struct SyncDeviceRecord {
     /// Human-readable machine name (hostname) reported by the device.
     #[serde(default)]
     pub device_name: String,
+    /// Collector role this device advertises in `_sync_devices.role`.
+    ///
+    /// `auto` (default) yields to any fresh `forced` peer and to any
+    /// `auto` peer with a smaller device id; `forced` never yields (two
+    /// forced devices both collect — manual double-write, as documented).
+    /// This mirrors the `VRCX_FeedCollector` tri-state that shipped in
+    /// VRCX-K: a 24/7 server sets `forced`, desktops stay `auto` and let
+    /// it collect, so no two nodes ever record the same friend event.
+    #[serde(default)]
+    pub role: String,
     /// Server-captured client address (PostgreSQL inet_client_addr).
     #[serde(default)]
     pub ip_addr: String,

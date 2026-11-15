@@ -80,7 +80,7 @@ pub use profile_backup::{
 };
 pub use profile_config::{resolve_config_key, ConfigMutation, ConfigReadEntry, ConfigWriteEntry};
 pub use sync::{
-    is_config_key_syncable, looks_like_user_prefix, register_sync_table, register_sync_table_owned,
+    is_config_key_syncable, DEVICE_ROLE_AUTO, DEVICE_ROLE_FORCED, looks_like_user_prefix, register_sync_table, register_sync_table_owned,
     resolve_sync_table, sync_table_descriptor, SyncBootstrapProgress, SyncConnectionFields,
     SyncConnectionInput, SyncConnectionTestResult, SyncCycleRecord, SyncDeviceRecord,
     SyncFieldSemantic, SyncHlc, SyncOpKind, SyncOpRecord, SyncRowSemantic, SyncStatusSnapshot,
