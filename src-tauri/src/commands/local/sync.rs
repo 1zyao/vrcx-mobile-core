@@ -8,7 +8,7 @@ use crate::state::AppState;
 use vrcx_0_contracts::{
     SyncBootstrapProgress, SyncConnectionFields, SyncConnectionTestResult, SyncStatusSnapshot,
 };
-use vrcx_0_runtime_host_desktop::local_data::ConfigWriteEntry;
+use vrcx_0_contracts::ConfigWriteEntry;
 
 fn config_entry(key: &str, value: impl std::fmt::Display) -> ConfigWriteEntry {
     ConfigWriteEntry {
