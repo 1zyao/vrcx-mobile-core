@@ -110,8 +110,6 @@ pub struct RuntimeHostState {
     pub(crate) data_dir_migration: DataDirMigrationRuntime,
     pub(crate) runtime_context: Arc<RuntimeHostContext>,
     pub(crate) remote_sync_host: Arc<crate::state::remote_sync::RemoteSyncHost>,
-    /// Shared with the gated realtime transport; flipped by the collector election.
-    pub(crate) realtime_gate: crate::state::PauseGate,
     desktop_assembly: RuntimeHostDesktopAssemblyDeps,
     pub(crate) backend_runtime: BackendRuntime,
     pub(crate) realtime_runtime: Arc<RealtimeHostRuntime>,
@@ -383,6 +381,7 @@ impl RuntimeHostStateBuilder {
                 }),
             ));
         let data_dir_migration = DataDirMigrationRuntime::new(data_dir_migration_port);
+
         Ok(Self {
             profile,
             app_data_dir,
@@ -493,17 +492,11 @@ impl RuntimeHostStateBuilder {
             self.backend_runtime.clone(),
             self.runtime_context.event_bus.clone(),
         );
-        // Shared with the gated transport below and with the collector
-        // election that flips it after startup.
-        let realtime_gate = crate::state::PauseGate::new();
         let realtime_transport: Arc<dyn vrcx_0_application_realtime::RealtimeTransport> =
-            Arc::new(crate::state::realtime_gate::GatedRealtimeTransport::new(
-                Arc::new(vrcx_0_outbound_adapters::VrchatRealtimeTransport::new(
-                    self.runtime_context.db.db_path().to_path_buf(),
-                    Arc::clone(&self.runtime_context.web),
-                    backend_status.clone(),
-                )),
-                realtime_gate.clone(),
+            Arc::new(vrcx_0_outbound_adapters::VrchatRealtimeTransport::new(
+                self.runtime_context.db.db_path().to_path_buf(),
+                Arc::clone(&self.runtime_context.web),
+                backend_status.clone(),
             ));
         let realtime_runtime = Arc::new(RealtimeHostRuntime::new(
             RealtimeHostRuntimeDeps {
@@ -685,7 +678,6 @@ impl RuntimeHostStateBuilder {
             remote_sync_host: self.remote_sync_host,
             desktop_assembly: self.desktop_assembly,
             backend_runtime: self.backend_runtime,
-            realtime_gate,
             realtime_runtime,
             web: self.web,
             image_cache: self.image_cache,
@@ -747,12 +739,6 @@ impl RuntimeHostState {
 
     pub fn backend_runtime(&self) -> &BackendRuntime {
         &self.backend_runtime
-    }
-
-    /// Flag shared with the gated realtime transport; the collector election
-    /// flips it so only one device keeps the VRChat websocket open.
-    pub fn realtime_gate(&self) -> crate::state::PauseGate {
-        self.realtime_gate.clone()
     }
 
     pub fn realtime_runtime(&self) -> &Arc<RealtimeHostRuntime> {
