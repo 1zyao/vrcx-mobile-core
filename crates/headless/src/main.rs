@@ -72,6 +72,9 @@ async fn async_main() -> ExitCode {
         launched_from_autostart: false,
         app_data_dir: app_data_dir.clone(),
         app_version: product_app_version(),
+        // 无头节点没有 UI 展示机器名；留空即可（字段文档：empty hides it）。
+        // 需要区分多台服务器时，可用 VRCX0_DEVICE_HOSTNAME 覆盖。
+        device_hostname: std::env::var("VRCX0_DEVICE_HOSTNAME").unwrap_or_default(),
         profile: RuntimeHostProfile::HeadlessData,
         database_maintenance_cache_dir: None,
         task_executor: Some(Arc::new(TokioRuntimeTaskExecutor)),
