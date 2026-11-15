@@ -3,8 +3,12 @@
 //! Several devices sharing one sync database all hold the same VRChat account,
 //! so they all observe the same friend events. `feed_*` rows are natural-keyed
 //! on a client-stamped `created_at`, so duplicated observations cannot be merged
-//! by any key — the only reliable fix is a single collector, with everyone else
-//! holding their websocket off (see [`super::realtime_gate`]).
+//! by any key — the only reliable fix is a single collector.
+//!
+//! Losing the election does **not** drop the realtime connection: the websocket
+//! stays up so the UI stays live, and only live feed *writes* are skipped
+//! (`vrcx_0_contracts::collector_gate`). The rows arrive through sync instead,
+//! so the data is identical on every device without duplicating observations.
 //!
 //! The rules are the ones that shipped in VRCX-K (`VRCX_FeedCollector`:
 //! `feedCollector.js` + `nodeRegistry.js`), re-based onto the sync device
@@ -33,11 +37,10 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use vrcx_0_contracts::{SyncDeviceRecord, DEVICE_ROLE_FORCED};
+use vrcx_0_contracts::{set_live_feed_collector, SyncDeviceRecord, DEVICE_ROLE_FORCED};
 use vrcx_0_persistence::config::get_string;
 
-use crate::state::realtime_gate::PauseGate;
-use crate::state::remote_sync::RemoteSyncHost;
+use super::RemoteSyncHost;
 
 /// Config key holding this device's collector role.
 pub const CONFIG_COLLECTOR_ROLE: &str = "remoteSync.collector";
@@ -120,7 +123,7 @@ pub fn may_collect(own_device_id: &str, own_role: &str, devices: &[SyncDeviceRec
 /// Evaluate the election once and apply it to the gate.
 ///
 /// Returns `(may_collect, blockers)` so callers can log transitions.
-pub async fn evaluate(host: &Arc<RemoteSyncHost>, gate: &PauseGate) -> (bool, Vec<String>) {
+pub async fn evaluate(host: &Arc<RemoteSyncHost>) -> (bool, Vec<String>) {
     let role = read_role(host);
     let status = host.status().await;
     let device_id = if status.device_id.is_empty() {
@@ -132,20 +135,22 @@ pub async fn evaluate(host: &Arc<RemoteSyncHost>, gate: &PauseGate) -> (bool, Ve
     // Not configured (or no engine yet): nothing is syncing, so nothing can
     // conflict — collect. Fail-open per the module docs.
     if !status.enabled || device_id.is_empty() {
-        gate.set_paused(false);
+        set_live_feed_collector(true);
         return (true, Vec::new());
     }
 
     let blocking = blockers(&device_id, &role, &status.remote_devices);
     let may = may_collect(&device_id, &role, &status.remote_devices);
-    if gate.set_paused(!may) {
+    // Flip the write gate only; the websocket stays up so the UI remains live
+    // and the rows arrive through sync instead.
+    if set_live_feed_collector(may) {
         if may {
-            tracing::info!(role = %role, "collector election: this device now collects");
+            tracing::info!(role = %role, "collector election: this device now records live feed");
         } else {
             tracing::info!(
                 role = %role,
                 blockers = ?blocking,
-                "collector election: yielding collection (realtime session held off)"
+                "collector election: letting another device record live feed (UI stays live)"
             );
         }
     }
@@ -156,10 +161,13 @@ pub async fn evaluate(host: &Arc<RemoteSyncHost>, gate: &PauseGate) -> (bool, Ve
 ///
 /// Runs one evaluation immediately so a headless node that starts while a
 /// desktop is collecting begins holding right away instead of after one poll.
-pub fn spawn(host: Arc<RemoteSyncHost>, gate: PauseGate, tasks: &vrcx_0_application_core::TaskSupervisor) {
+pub fn spawn(
+    host: Arc<RemoteSyncHost>,
+    tasks: &vrcx_0_application_core::TaskSupervisor,
+) {
     tasks.spawn(async move {
         loop {
-            let _ = evaluate(&host, &gate).await;
+            let _ = evaluate(&host).await;
             tokio::time::sleep(POLL_INTERVAL).await;
         }
     });

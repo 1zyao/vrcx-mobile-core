@@ -22,8 +22,6 @@ mod capabilities;
 mod combined_snapshot;
 mod frontend_session;
 mod profile_lock;
-mod collector_election;
-mod realtime_gate;
 mod remote_sync;
 mod runtime_host_state;
 mod services;
@@ -43,7 +41,6 @@ use background_ticks::{
 };
 pub use combined_snapshot::BackendRuntimeCombinedSnapshot;
 use profile_lock::{AtomicFlagGuard, SharedAtomicFlagGuard};
-pub use realtime_gate::PauseGate;
 pub use remote_sync::{RemoteSyncHost, RemoteSyncSettings};
 #[cfg(test)]
 use runtime_host_state::web_ua_app_version;

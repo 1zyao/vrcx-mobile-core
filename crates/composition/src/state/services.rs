@@ -163,15 +163,6 @@ impl RuntimeHostState {
             });
         self.profile_backup.start_scheduler();
         Arc::clone(&self.remote_sync_host).start_auto();
-        // Exactly one device may hold the VRChat realtime session while several
-        // share the sync database, otherwise the same friend event is recorded
-        // once per device with different client-side timestamps and the rows
-        // cannot be merged. Rules live in `collector_election`.
-        crate::state::collector_election::spawn(
-            Arc::clone(&self.remote_sync_host),
-            self.realtime_gate(),
-            &self.runtime_context.tasks,
-        );
     }
 }
 
