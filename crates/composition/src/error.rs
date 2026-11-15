@@ -17,6 +17,17 @@ pub enum Error {
     },
 }
 
+impl Error {
+    /// Free-form error carrying a pre-rendered message.
+    ///
+    /// Upstream keeps `Custom` on `vrcx_0_application_core::Error`; this
+    /// helper keeps call sites (notably the remote-sync host, which is not
+    /// part of upstream) from spelling out the wrapping every time.
+    pub fn custom(message: impl Into<String>) -> Self {
+        Self::Application(ApplicationError::Custom(message.into()))
+    }
+}
+
 impl From<std::io::Error> for Error {
     fn from(value: std::io::Error) -> Self {
         Self::Application(value.into())
