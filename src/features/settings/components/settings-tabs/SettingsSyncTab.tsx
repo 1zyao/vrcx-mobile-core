@@ -786,27 +786,7 @@ export function SettingsSyncTab() {
                 )}
             </SettingsCard>
 
-            <details className="group border-stroke-subtle text-sm">
-                <summary className="text-muted-foreground hover:text-foreground flex cursor-pointer list-none items-center gap-2 py-2 text-xs select-none">
-                    <CloudCogIcon className="size-3.5" />
-                    {t('view.settings.sync.cloud.title')}
-                    <ChevronDownIcon className="size-3 transition-transform group-open:rotate-180" />
-                </summary>
-                <p className="text-muted-foreground pb-2 text-xs leading-relaxed">
-                    {t('view.settings.sync.cloud.body')}
-                </p>
-                <p className="pb-1 text-xs">
-                    <a
-                        href="https://github.com/Ero-Cat/VRCX-Cloud"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-primary inline-flex items-center gap-1 hover:underline"
-                    >
-                        <ExternalLinkIcon className="size-3" />
-                        github.com/Ero-Cat/VRCX-Cloud
-                    </a>
-                </p>
-            </details>
+
         </SettingsTabContent>
     );
 }

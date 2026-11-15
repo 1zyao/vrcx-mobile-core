@@ -47,6 +47,11 @@ impl RemoteSyncHost {
         }
     }
 
+    /// Local database handle (config store + per-device sync state).
+    pub fn db(&self) -> &Arc<DatabaseService> {
+        &self.db
+    }
+
     pub fn current(&self) -> Option<Arc<RemoteSyncEngine>> {
         self.engine.read().ok().and_then(|guard| guard.clone())
     }
