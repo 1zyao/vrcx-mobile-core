@@ -23,16 +23,12 @@ use vrcx_0_application_game::{
     GameClientEvent, GameLogPersistenceFallbackPayload, GameLogProjection, GameLogSideEffectEvent,
     RuntimeGameLogEventPayload, RuntimeWorkerErrorPayload,
 };
-<<<<<<< HEAD
 use vrcx_0_application_realtime::{
     FriendProjection, RealtimeCurrentUserProjection, RealtimeEconomyBalancePayload,
     RealtimeEntryCorrection, RealtimeFeedProjection, RealtimeInstanceClosedProjection,
     RealtimeInstanceQueueProjection, RealtimeNotificationProjection, RealtimeUserProjection,
 };
-=======
-use vrcx_0_application_realtime::RealtimeFeedProjection;
 use vrcx_0_application_sync::SyncStatusChangedEvent;
->>>>>>> a4615601b (feat(sync): observable cycles, device presence and push-driven status)
 use vrcx_0_assistant::{
     AssistantApprovalRequestEvent, AssistantChoiceRequestEvent, AssistantDeltaEvent,
     AssistantDoneEvent, AssistantErrorEvent, AssistantToolCallEvent, AssistantToolResultEvent,

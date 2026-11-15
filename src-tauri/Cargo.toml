@@ -54,11 +54,8 @@ vrcx-0-contracts = { path = "../crates/contracts" }
 vrcx-0-application-activity = { path = "../crates/application-activity" }
 vrcx-0-application-core = { path = "../crates/application-core" }
 vrcx-0-application-realtime = { path = "../crates/application-realtime" }
-<<<<<<< HEAD
 vrcx-0-logger-protocol = { path = "../crates/logger-protocol", features = ["specta"] }
-=======
 vrcx-0-application-sync = { path = "../crates/application-sync" }
->>>>>>> a4615601b (feat(sync): observable cycles, device presence and push-driven status)
 vrcx-0-application-game = { path = "../crates/application-game" }
 vrcx-0-mcp = { path = "../crates/mcp" }
 vrcx-0-integration-api = { path = "../crates/integration-api" }
