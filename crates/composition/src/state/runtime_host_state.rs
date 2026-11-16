@@ -56,6 +56,7 @@ use vrcx_0_platform::app_paths::{
     app_data_paths_match, commit_app_data_dir_pointer, AppDataDirResolution, AppDataDirSource,
     AppPaths,
 };
+use vrcx_0_social_runtime::SocialRuntime;
 
 #[cfg(test)]
 use std::sync::atomic::Ordering;
@@ -115,6 +116,13 @@ pub struct RuntimeHostState {
     desktop_assembly: RuntimeHostDesktopAssemblyDeps,
     pub(crate) backend_runtime: BackendRuntime,
     pub(crate) realtime_runtime: Arc<RealtimeHostRuntime>,
+    /// Social baseline reads (`app__social_favorites_baseline_get`,
+    /// `app__social_friend_roster_baseline_get`), shared by every host.
+    ///
+    /// Same reason as `vrchat_remote`: the phone and headless hosts register the
+    /// cloud/desktop command names against one implementation instead of each
+    /// re-deriving the orchestration.
+    pub(crate) social: SocialRuntime,
     /// Shared VRChat remote facade: one implementation of the per-endpoint calls
     /// (`app__vrchat_*`) for every host, so the mobile command surface registers the
     /// cloud/desktop shape instead of re-deriving requests.
@@ -613,6 +621,19 @@ impl RuntimeHostStateBuilder {
                 realtime_runtime: Arc::clone(&realtime_runtime),
                 favorites_sink,
             });
+        // Social baseline reads. Every dependency is already built above: the
+        // authenticated orchestrator owns `SocialBaselineDeps` (realtime stores, config
+        // store, VrchatRealtimeRemoteRequests, WebClient, RuntimeAuthScope), the realtime
+        // runtime is what the friend roster baseline is projected through, and the
+        // diagnostics/sync engines are the same sinks the desktop graph records into.
+        // Assembled here rather than in `RuntimeHostContext::new` because both of those
+        // runtimes only exist at this point.
+        let social = SocialRuntime::new(
+            authenticated_runtime.clone(),
+            Arc::clone(&realtime_runtime),
+            self.runtime_context.diagnostics.clone(),
+            self.runtime_context.sync.clone(),
+        );
         let favorite_import = FavoriteImportRuntime::new(FavoriteImportRuntimeDeps {
             store: Arc::clone(&self.runtime_context.favorite_store),
             remote: Arc::clone(&self.runtime_context.favorite_remote),
@@ -715,6 +736,7 @@ impl RuntimeHostStateBuilder {
             desktop_assembly: self.desktop_assembly,
             backend_runtime: self.backend_runtime,
             realtime_runtime,
+            social,
             vrchat_remote,
             web: self.web,
             image_cache: self.image_cache,
@@ -780,6 +802,16 @@ impl RuntimeHostState {
 
     pub fn realtime_runtime(&self) -> &Arc<RealtimeHostRuntime> {
         &self.realtime_runtime
+    }
+
+    /// Social baseline reads (`app__social_favorites_baseline_get`,
+    /// `app__social_friend_roster_baseline_get`).
+    ///
+    /// The same runtime the desktop host uses, so a transport can register the cloud
+    /// command names against one implementation instead of re-deriving the
+    /// orchestration per host.
+    pub fn social(&self) -> &SocialRuntime {
+        &self.social
     }
 
     /// Per-endpoint VRChat remote calls (`app__vrchat_*`).

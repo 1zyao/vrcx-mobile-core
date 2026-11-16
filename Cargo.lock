@@ -9754,6 +9754,7 @@ dependencies = [
  "vrcx-0-outbound-adapters",
  "vrcx-0-persistence",
  "vrcx-0-platform",
+ "vrcx-0-social-runtime",
 ]
 
 [[package]]
@@ -10178,6 +10179,15 @@ dependencies = [
  "vrcx-0-platform",
  "vrcx-0-vrchat-client",
  "vrcx-0-vrchat-protocol",
+]
+
+[[package]]
+name = "vrcx-0-social-runtime"
+version = "0.1.0"
+dependencies = [
+ "vrcx-0-application",
+ "vrcx-0-application-core",
+ "vrcx-0-application-realtime",
 ]
 
 [[package]]

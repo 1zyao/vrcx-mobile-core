@@ -15,3 +15,4 @@ pub use state::{
     BackendRuntimeCombinedSnapshot, CliLoginPrompt, CliTwoFactorChoice, RemoteSyncHost,
     RemoteSyncSettings, RuntimeHostOptions, RuntimeHostState, RuntimeHostStateBuilder,
 };
+pub use vrcx_0_social_runtime::SocialRuntime;

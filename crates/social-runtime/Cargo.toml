@@ -1,0 +1,11 @@
+[package]
+name = "vrcx-0-social-runtime"
+version = "0.1.0"
+edition = "2021"
+license.workspace = true
+description = "Host-neutral social runtime (baseline reads shared by every host)"
+
+[dependencies]
+vrcx-0-application = { path = "../application" }
+vrcx-0-application-core = { path = "../application-core" }
+vrcx-0-application-realtime = { path = "../application-realtime" }

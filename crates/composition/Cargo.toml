@@ -33,6 +33,7 @@ vrcx-0-platform = { path = "../platform" }
 vrcx-0-media = { path = "../media" }
 vrcx-0-outbound-adapters = { path = "../outbound-adapters" }
 vrcx-0-persistence = { path = "../persistence" }
+vrcx-0-social-runtime = { path = "../social-runtime" }
 
 [dev-dependencies]
 vrcx-0-application-realtime = { path = "../application-realtime", features = ["test-utils"] }

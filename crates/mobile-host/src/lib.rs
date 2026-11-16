@@ -207,12 +207,18 @@ async fn app__backend_runtime_combined_snapshot_get(
         .map_err(|error| CommandError::failed(error.to_string()))
 }
 
+/// Session restore, using the state-level method that applies login transitions.
+///
+/// `RuntimeHostContext::auto_login_start` takes a no-op transition sink, so it never calls
+/// `start_authenticated_runtime_session` and leaves `RuntimeAuthScope` inactive. Anything that
+/// checks the scope (the social baselines, for instance) then reports `stale`. The state-level
+/// `start_auto_login` does apply transitions, and cloud wires this command to it as well.
 async fn app__vrchat_auth_auto_login_start(
     state: Arc<RuntimeHostState>,
-    input: AutoLoginStartInput,
+    args: InputArgs<AutoLoginStartInput>,
 ) -> Result<serde_json::Value, CommandError> {
     let outcome = state
-        .auto_login_start(input)
+        .start_auto_login(args.input)
         .await
         .map_err(|error| CommandError::failed(error.to_string()))?;
     serde_json::to_value(outcome).map_err(|error| CommandError::failed(error.to_string()))
@@ -317,6 +323,37 @@ async fn app__vrchat_search_groups_get(
     serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
 }
 
+/// Social favourites baseline, same name and `{"input": {…}}` envelope as cloud
+/// (`arg(&args, "input")` in cloud/crates/server/src/commands/application_social.rs:517).
+///
+/// The body is `state.social().favorites_baseline(input)`; the orchestration lives in
+/// `vrcx-0-social-runtime`, which is the same code path the desktop host uses.
+async fn app__social_favorites_baseline_get(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<vrcx_0_application_realtime::SocialFavoritesBaselineInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let output = state
+        .social()
+        .favorites_baseline(args.input)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(output).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+/// Social friend roster baseline, same name and envelope as cloud
+/// (cloud/crates/server/src/commands/application_social.rs:524).
+async fn app__social_friend_roster_baseline_get(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<vrcx_0_application_realtime::SocialFriendRosterBaselineInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let output = state
+        .social()
+        .friend_roster_baseline(args.input)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(output).map_err(|error| CommandError::failed(error.to_string()))
+}
+
 /// The command surface exposed to the phone UI.
 pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
     let mut registry = CommandRegistry::new();
@@ -388,7 +425,7 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         "app__backend_runtime_combined_snapshot_get",
         app__backend_runtime_combined_snapshot_get,
     );
-    registry.register_typed::<AutoLoginStartInput, serde_json::Value, _, _>(
+    registry.register_typed::<InputArgs<AutoLoginStartInput>, serde_json::Value, _, _>(
         "app__vrchat_auth_auto_login_start",
         app__vrchat_auth_auto_login_start,
     );
@@ -399,6 +436,24 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
     registry.register_typed::<WebExecuteInput, serde_json::Value, _, _>(
         "app__web_execute",
         app__web_execute,
+    );
+    registry.register_typed::<
+        InputArgs<vrcx_0_application_realtime::SocialFavoritesBaselineInput>,
+        serde_json::Value,
+        _,
+        _,
+    >(
+        "app__social_favorites_baseline_get",
+        app__social_favorites_baseline_get,
+    );
+    registry.register_typed::<
+        InputArgs<vrcx_0_application_realtime::SocialFriendRosterBaselineInput>,
+        serde_json::Value,
+        _,
+        _,
+    >(
+        "app__social_friend_roster_baseline_get",
+        app__social_friend_roster_baseline_get,
     );
     registry
 }
@@ -446,10 +501,12 @@ mod tests {
             "app__vrchat_favorite_add",
             "app__vrchat_favorite_delete",
             "app__vrchat_favorite_groups_get",
+            "app__social_favorites_baseline_get",
+            "app__social_friend_roster_baseline_get",
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 20);
+        assert_eq!(registry.len(), 22);
     }
 }
 
@@ -589,6 +646,7 @@ async fn app__favorite_list(
     .map_err(|error| CommandError::failed(error.to_string()))?;
     Ok(rows)
 }
+
 
 
 
