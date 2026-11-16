@@ -10,6 +10,8 @@
 //! only needs an HTTP client and the JSON shapes, so the boundary can later be
 //! pointed at a remote host without touching the UI.
 
+pub mod host;
+
 use std::path::Path;
 
 use serde::Serialize;
@@ -141,3 +143,4 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 }
+
