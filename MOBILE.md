@@ -862,3 +862,48 @@ pid 13945 / core ready on port 44009 / 无 FATAL
 每个 VRChat 读接口都可以照这个形状换：`isVrcxCoreReady()` 分流 + 核心返回原始 JSON +
 原 DTO 反序列化。UsersApi 里还有 10 个方法（searchUser / getUserGroups /
 getMutualFriends / …），WorldsApi / AvatarsApi / GroupsApi 同理。
+
+---
+
+## 传输链路端到端验证通过（2026-11-17，真机）
+
+用公开端点 `GET /api/1/config`（不需要登录）做探针，真机 logcat：
+
+```
+I VrcxCore: core ready on port 44769
+I VrcxCore: feedRows ok: []
+I VrcxCore: probe vrchatGet(config) ok: {"CampaignStatus":"Disabled",
+    "DisableBackgroundPreloads":true,"HistoryFrameworkEternalBurrito":1, ...}
+```
+
+完整链路：
+
+```
+VRCM (Kotlin/Ktor)
+  → http://127.0.0.1:44769/api/invoke
+  → CommandRegistry<RuntimeHostState>
+  → app__web_execute
+  → Rust web_client (持有 cookie jar)
+  → https://api.vrchat.cloud/api/1/config
+  → 原始 JSON 原样回到 Kotlin
+```
+
+这是 Java/Kotlin 侧第一次拿到**由 Rust 核心从 VRChat 取回的真实数据**。
+之前所有验证都只到"命令被分发、返回空数组"，这次是真实外部数据。
+
+### 途中抓到的真问题
+
+第一次探针返回：
+
+```
+`app__web_execute` is not available on this transport
+```
+
+因为**加了 Rust 命令却没重新编译 `.so`** —— APK 里还是旧库。
+这个错误码（`unsupported`）设计得对：它把"命令没注册"和"命令执行失败"清楚地区分开，
+一眼就能看出是构建产物过期，不是逻辑错。
+
+修法：`cargo build --target x86_64-linux-android -p vrcx-0-mobile-core`
+→ 复制 `.so` 到 `composeApp/src/androidMain/jniLibs/x86_64/` → 重新打包。
+
+**这应该进构建脚本**，不能靠人工记。
