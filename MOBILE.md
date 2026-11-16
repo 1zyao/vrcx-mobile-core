@@ -1445,3 +1445,43 @@ actual fun createApiEngine() = null
 `configureApiClient(...)` 抽成一个可复用的 lambda。
 
 **在那之前，VRCM 的桌面 target 不可用** —— 这点必须记住，不能因为"编译过了"就以为没问题。
+
+---
+
+## VRCM 侧改动已提交到独立分支（2026-11-17）
+
+分支 `vrcx-core`（从 1.1.6 拉出，**没动 `main`**），四个逻辑提交：
+
+```
+d7edbb7  build: cross-compile the core into jniLibs
+c6ed9f2  feat: transport all VRChat traffic through the core
+52e8b32  feat: run the login lifecycle through the core
+5b30797  feat: load the VRCX-0 core in-process
+3f8b027  chore(release): bump version to 1.1.6   ← 原基线
+```
+
+`.so` 已加入 `.gitignore`（`composeApp/src/androidMain/jniLibs/`），
+所以 121 MB 的二进制不会进仓库 —— 由 `scripts/build-core.ps1` 生成。
+
+### iOS 验证路径
+
+VRCM 已有 `.github/workflows/IOS_Build.yml`：
+
+```
+runs-on: macos-latest
+./gradlew :composeApp:linkDebugFrameworkIosArm64
+```
+
+**所以 iOS 的真实验证是现成的** —— 只要这个分支推到远端，CI 就会跑
+`linkDebugFrameworkIosArm64`，那一刻才能确认：
+
+- `expect/actual` 在 iOS target 上成立
+- commonMain 没有平台专有泄漏
+- `CoreHttpEngine` 用的是 Ktor 公共 API（不含 android-only）
+
+在 Windows 本地无法验证这三点，只能静态保证。
+
+### 待办
+
+**推送需要你的授权** —— 会用你的 GitHub 凭据，而且是对你 fork 的写操作。
+推上去之后 CI 才会跑。要我推吗？
