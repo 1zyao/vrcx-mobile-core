@@ -370,3 +370,21 @@ icacls 'D:\vrcx0\mobile' /setintegritylevel '(OI)(CI)M'
 `vendor/`（1.19 GB，为了绕开写入限制） | 也许可以去掉，待验证 |
 
 注：`std::env::temp_dir()` 在测试里已改为工作区目录，可保留（无害且更快）。
+
+### 清理验证结果（2026-11-16）
+
+抬完整性标签后重打 APK，**完全不带** `DOCS_RS` 和 `CFLAGS=-save-temps=obj`：
+
+```
+npx tauri android build --debug --apk --target x86_64   → 成功
+adb install + am start                                  → 进程存活
+logcat FATAL / AndroidRuntime / ClassNotFound           → 无
+```
+
+**插件 provision 问题确认解决** —— 之前 `ClassNotFoundException: app.tauri.deep_link.DeepLinkPlugin`
+是因为插件写不进 registry、Android 模块没进 APK；现在自动 provision，崩溃消失。
+
+手机端独立入口也验证可用：`dist-mobile` + `mobile.html` → 底栏 Home/Favorites/Inbox
++ 独立圆形搜索钮（VRCM 1.1.4 的导航形态），页面路由到 stub。
+
+`vendor/`（1.19 GB）尚未验证能否删除 —— 留待下一步。
