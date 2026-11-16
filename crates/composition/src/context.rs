@@ -590,3 +590,37 @@ impl RuntimeHostContext {
         &self.login_session
     }
 }
+
+impl RuntimeHostContext {
+    /// Starts a password / 2FA login attempt.
+    ///
+    /// Thin facade over `LoginSessionRuntime` so callers that do not own the
+    /// credential store, cookie jar or login API (the phone core, the headless
+    /// host) can drive login through one call.
+    pub async fn start_login_session(
+        &self,
+        input: vrcx_0_application::auth::LoginSessionStartInput,
+    ) -> vrcx_0_application::auth::LoginSessionState {
+        self.login_session
+            .start(
+                Arc::clone(&self.login_api),
+                self.auth_cookies.as_ref(),
+                self.auth_credentials.as_ref(),
+                input,
+                &|_| Ok(()),
+            )
+            .await
+    }
+
+    /// Abandons an in-flight login attempt.
+    pub async fn cancel_login_session(
+        &self,
+        attempt_id: String,
+    ) -> vrcx_0_application::auth::LoginSessionState {
+        self.login_session
+            .cancel(attempt_id, self.auth_cookies.as_ref(), &|_| Ok(()))
+            .await
+    }
+
+}
+

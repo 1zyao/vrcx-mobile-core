@@ -10002,7 +10002,9 @@ dependencies = [
 name = "vrcx-0-mobile-host"
 version = "0.1.0"
 dependencies = [
+ "serde_json",
  "tokio",
+ "vrcx-0-application",
  "vrcx-0-command-server",
  "vrcx-0-composition",
  "vrcx-0-persistence",

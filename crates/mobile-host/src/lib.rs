@@ -12,6 +12,7 @@ use std::sync::Arc;
 
 use vrcx_0_command_server::{CommandBus, CommandError, CommandRegistry, EventBus};
 use vrcx_0_composition::RuntimeHostState;
+use vrcx_0_application::auth::{LoginSessionCancelInput, LoginSessionStartInput};
 use vrcx_0_persistence::feed;
 
 /// Runs a synchronous persistence call off the async workers.
@@ -34,12 +35,36 @@ async fn app__feed_rows_query(
     blocking("feed rows", move || feed::feed_rows_query(&db, input)).await
 }
 
+async fn app__vrchat_auth_session_start(
+    state: Arc<RuntimeHostState>,
+    input: LoginSessionStartInput,
+) -> Result<serde_json::Value, CommandError> {
+    let outcome = state.start_login_session(input).await;
+    serde_json::to_value(outcome).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+async fn app__vrchat_auth_session_cancel(
+    state: Arc<RuntimeHostState>,
+    input: LoginSessionCancelInput,
+) -> Result<serde_json::Value, CommandError> {
+    let outcome = state.cancel_login_session(input).await;
+    serde_json::to_value(outcome).map_err(|error| CommandError::failed(error.to_string()))
+}
+
 /// The command surface exposed to the phone UI.
 pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
     let mut registry = CommandRegistry::new();
     registry.register_typed::<feed::FeedRowsQueryInput, Vec<feed::FeedRowOutput>, _, _>(
         "app__feed_rows_query",
         app__feed_rows_query,
+    );
+    registry.register_typed::<LoginSessionStartInput, serde_json::Value, _, _>(
+        "app__vrchat_auth_session_start",
+        app__vrchat_auth_session_start,
+    );
+    registry.register_typed::<LoginSessionCancelInput, serde_json::Value, _, _>(
+        "app__vrchat_auth_session_cancel",
+        app__vrchat_auth_session_cancel,
     );
     registry
 }
@@ -51,4 +76,24 @@ pub fn build_bus(state: RuntimeHostState) -> Arc<CommandBus<RuntimeHostState>> {
         state: Arc::new(state),
         events: EventBus::new(256),
     })
+}
+
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn registers_the_phone_command_surface() {
+        let registry = build_registry();
+        for name in [
+            "app__feed_rows_query",
+            "app__vrchat_auth_session_start",
+            "app__vrchat_auth_session_cancel",
+        ] {
+            assert!(registry.contains(name), "missing command: {name}");
+        }
+        assert_eq!(registry.len(), 3);
+    }
 }
