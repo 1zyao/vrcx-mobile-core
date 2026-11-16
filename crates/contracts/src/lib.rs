@@ -39,6 +39,7 @@ pub mod vrchat_api;
 pub mod vrchat_requests;
 mod web;
 pub mod world_collections;
+pub mod worlds;
 
 pub use avatar::{
     AvatarTagInput, AvatarTagOutput, AvatarTagsPatchInput, AvatarTimeSpentOutput, AvatarUsageRow,
@@ -102,3 +103,4 @@ pub use web::{
     RealtimeAuthTokenFetch, RealtimeConnectionOptions, WebExecuteRequest, WebMultipartPart,
     WebUploadMode,
 };
+pub use worlds::WorldGetInput;

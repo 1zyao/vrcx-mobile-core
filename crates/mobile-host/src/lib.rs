@@ -167,6 +167,31 @@ async fn app__notification_list_query(
     })
     .await
 }
+
+/// `app__world_get` takes its input under `input`, not `query`.
+///
+/// Cloud registers it as `arg(&args, "input")?`
+/// (cloud/crates/server/src/commands/local_data_queries.rs:800), unlike the
+/// `query`-enveloped list commands above, so the wire shape is
+/// `{"input": {"worldId": …}}` and stays that way here.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorldGetArgs {
+    input: vrcx_0_contracts::WorldGetInput,
+}
+
+/// World details, cache-first, from the same read model the desktop/cloud command
+/// uses (`RuntimeHostState::world_get`); this replaces the phone's
+/// `proxy GET https://api.vrchat.cloud/api/1/worlds/{id}` round trip.
+async fn app__world_get(
+    state: Arc<RuntimeHostState>,
+    args: WorldGetArgs,
+) -> Result<vrcx_0_contracts::VrchatResponse, CommandError> {
+    state
+        .world_get(args.input)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))
+}
 async fn app__vrchat_auth_session_start(
     state: Arc<RuntimeHostState>,
     input: LoginSessionStartInput,
@@ -507,6 +532,10 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         "app__notification_list_query",
         app__notification_list_query,
     );
+    registry.register_typed::<WorldGetArgs, vrcx_0_contracts::VrchatResponse, _, _>(
+        "app__world_get",
+        app__world_get,
+    );
     registry.register_typed::<InputArgs<FavoriteAddInput>, serde_json::Value, _, _>(
         "app__vrchat_favorite_add",
         app__vrchat_favorite_add,
@@ -625,10 +654,12 @@ mod tests {
             "app__vrchat_favorite_groups_get",
             "app__social_favorites_baseline_get",
             "app__social_friend_roster_baseline_get",
+            "app__notification_list_query",
+            "app__world_get",
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 27);
+        assert_eq!(registry.len(), 28);
     }
 }
 

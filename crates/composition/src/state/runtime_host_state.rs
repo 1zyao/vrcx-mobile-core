@@ -37,6 +37,7 @@ use vrcx_0_application_realtime::{
     FriendProjectionSink, RealtimeCurrentUserSnapshotSink, RealtimeHostRuntime,
     RealtimeHostRuntimeDeps, RealtimeSessionContext,
 };
+use vrcx_0_core::vrchat_endpoints::VRCHAT_API_DEFAULT_ENDPOINT;
 use vrcx_0_persistence::data_dir_migration::{
     cleanup_interrupted_data_dir_migration, complete_data_dir_migration,
     finalize_data_dir_migration, read_pending_data_dir_migration,
@@ -957,5 +958,37 @@ impl RuntimeHostState {
     /// as the sink, and the phone core installs its loopback broadcast instead.
     pub fn event_bus(&self) -> &vrcx_0_application_core::RuntimeEventBus {
         self.runtime_context.event_bus()
+    }
+}
+
+impl RuntimeHostState {
+    /// World detail read behind `app__world_get`.
+    ///
+    /// The body is cloud's `LocalDataRuntime::world_get`
+    /// (cloud/crates/runtime-host-server/src/local_data.rs:214), with the dependencies
+    /// swapped for the ones this runtime already owns rather than new ones: the shared
+    /// `WorldCache` is backed by `LocalWorldCacheAdapter`, which reads the local
+    /// `worlds` table that the realtime feed and the game-log processor keep filled.
+    /// A world this node already knows is answered from that local row and never
+    /// leaves the machine; only a miss (an unknown world, `force`, or `full`) resolves
+    /// through `worlds/{id}`. That is the same cache-first read model cloud and the
+    /// desktop command expose, not a VRChat passthrough.
+    ///
+    /// It returns the desktop's `VrchatResponse { status, data }` envelope so the phone
+    /// UI parses one shape whichever host answered.
+    pub async fn world_get(
+        &self,
+        input: vrcx_0_contracts::WorldGetInput,
+    ) -> vrcx_0_application_core::Result<vrcx_0_contracts::vrchat_api::VrchatResponse> {
+        let auth_scope = self.runtime_context.auth_scope.snapshot();
+        let endpoint = if auth_scope.endpoint.is_empty() {
+            VRCHAT_API_DEFAULT_ENDPOINT
+        } else {
+            auth_scope.endpoint.as_str()
+        };
+        self.runtime_context
+            .world_cache
+            .get(endpoint, &input.world_id, input.force, input.full)
+            .await
     }
 }
