@@ -133,3 +133,74 @@ logout()      → logout()                           app__vrchat_auth_session_en
 ⬜ iOS 编译验证                  需 push 触发 CI
 ⬜ app__debug_emit_event 移除     诊断用
 ```
+
+---
+
+# 新目标第一轮：后端读模型验证通过（2026-11-17）
+
+## 验证方式
+
+复制桌面 VRCX-0 的真实库（596 MB，不动原件）到 `out\logs\feed-probe\`，
+用 headless 命令总线查询：
+
+```
+$ vrcx-0-headless --data-dir <copy> --command-bus-port 8892 --command-bus-only
+POST /api/invoke
+{"cmd":"app__feed_rows_query",
+ "args":{"userId":"usr_ed329568-…","mode":"lookup","maxEntries":5}}
+```
+
+## 结果
+
+```
+lookup -> rows=5
+{
+  "avatarName": "Warhammer 40,000: Space Marine 2 - Ultramarine Redemptor Dreadnought",
+  "created_at": "2026-11-16T20:46:12.456526200+00:00",
+  "currentAvatarImageUrl": "https://api.vrchat.cloud/api/1/image/file_999cfbbc-…/1/256",
+  "displayName": "Kemomimi Yuki",
+  "ownerId": "usr_05447869-…",
+  ...
+}
+```
+
+`mode=lookup` 与 `mode=search` 都返回真实行。
+
+## 这证明了什么
+
+1. **后端的语义命令能给出真实读模型数据** —— 不是空数组、不是透传的 VRChat JSON
+2. **返回的字段正好覆盖 VRCM 需要的形状**：
+
+```
+FeedRowOutput                    FriendActivityEvent
+displayName                  →   displayName
+currentAvatarImageUrl        →   profileImageUrl
+created_at                   →   occurredAtMillis
+type                         →   type（6/9 可映射）
+worldName / location         →   worldName / currentValue
+avatarName                   →   currentValue（Avatar 类）
+```
+
+3. **图片 URL 是 `https://api.vrchat.cloud/api/1/image/...`** —— 公开 CDN，
+   UI 用普通客户端直接取即可（不经命令总线，天然避开二进制退化）
+
+## 两个踩到的小坑（都是我的调用方式，不是系统问题）
+
+- `args` 必须传对象，不能传 JSON 字符串（PowerShell `ConvertTo-Json` 没展开）
+- `userId` 必填，否则报 `User table prefix requires a user id`（feed 按用户前缀分表）
+
+## 下一轮
+
+```
+1. VrcxCoreClient 支持可配置 baseUrl（后端地址）
+2. 加 feedQuery(userId, mode, maxEntries, cursor) 便捷方法
+3. 写 BackendFriendActivityTimelineSource 实现 observeHead/Before/Through
+4. 接进 FriendActivityTimelineModel（页面不动）
+5. 真机看动态
+```
+
+## 尚未验证（必须诚实标注）
+
+这份数据来自**桌面端自己的库**，不是 remoteSync 把它们同步到后端的结果。
+所以「后端作为同步消费者」这条链路**仍未被验证** —— 它和「读模型可用」是两件事。
+新目标第（2）条的验收，需要后端有经同步得来的数据才能成立。
