@@ -193,7 +193,24 @@ impl VrchatRemoteFacade {
         .await
     }
 
-    pub async fn licensed_avatars(&self, n: i32, offset: i32) -> Result<VrchatResponse> {        self.execute(
+    /// The groups a user belongs to (`GET users/{id}/groups`).
+    pub async fn user_groups(&self, user_id: String) -> Result<VrchatResponse> {
+        let (user_id, request) =
+            vrcx_0_vrchat_protocol::groups::user_groups_get_input(
+                VRCHAT_API_DEFAULT_ENDPOINT.into(),
+                user_id,
+            )?;
+        self.execute(
+            "app__vrchat_group_user_groups_get",
+            format!("Getting groups for user {user_id}."),
+            request,
+            VrchatScope::Vrchat,
+        )
+        .await
+    }
+
+    pub async fn licensed_avatars(&self, n: i32, offset: i32) -> Result<VrchatResponse> {
+        self.execute(
             "app__vrchat_economy_licensed_avatars_get",
             "Getting licensed avatars.",
             licensed_avatars_get_input(VRCHAT_API_DEFAULT_ENDPOINT.into(), n, offset),

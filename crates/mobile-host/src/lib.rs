@@ -332,6 +332,37 @@ struct SearchGroupsInput {
     params: vrcx_0_contracts::vrchat_requests::GroupSearchParams,
 }
 
+/// Mirrors cloud's `VrchatGroupUserGroupsInput`.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GroupUserGroupsInput {
+    #[serde(default)]
+    user_id: String,
+}
+
+async fn app__vrchat_group_user_groups_get(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<GroupUserGroupsInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let response = state
+        .vrchat_remote()
+        .user_groups(args.input.user_id)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+async fn app__vrchat_user_represented_group_get(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<GroupUserGroupsInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let response = state
+        .vrchat_remote()
+        .user_represented_group(args.input.user_id)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
 /// Cloud reads `ownerUserId` as a bare top-level argument, not an `{input:{…}}` envelope.
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -635,6 +666,14 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         "app__notification_list_query",
         app__notification_list_query,
     );
+    registry.register_typed::<InputArgs<GroupUserGroupsInput>, serde_json::Value, _, _>(
+        "app__vrchat_group_user_groups_get",
+        app__vrchat_group_user_groups_get,
+    );
+    registry.register_typed::<InputArgs<GroupUserGroupsInput>, serde_json::Value, _, _>(
+        "app__vrchat_user_represented_group_get",
+        app__vrchat_user_represented_group_get,
+    );
     registry.register_typed::<
         LocalModerationListArgs,
         Vec<vrcx_0_contracts::local_moderation::LocalModerationOutput>,
@@ -782,7 +821,7 @@ mod tests {
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 32);
+        assert_eq!(registry.len(), 34);
     }
 }
 
@@ -922,6 +961,7 @@ async fn app__favorite_list(
     .map_err(|error| CommandError::failed(error.to_string()))?;
     Ok(rows)
 }
+
 
 
 
