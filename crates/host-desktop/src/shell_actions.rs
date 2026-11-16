@@ -249,6 +249,7 @@ pub fn open_folder_and_select_item(path: &str, is_folder: bool) -> Result<(), Er
     }
 }
 
+#[cfg(any(windows, target_os = "linux", target_os = "macos"))]
 pub fn move_to_trash(path: &Path) -> Result<(), Error> {
     trash::delete(path).map_err(|error| {
         Error::Custom(format!(
@@ -256,6 +257,16 @@ pub fn move_to_trash(path: &Path) -> Result<(), Error> {
             path.display()
         ))
     })
+}
+
+/// Android/iOS have no trash bin, and the `trash` crate has no implementation
+/// for them (it does not even compile there), so the dependency is desktop-only.
+#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
+pub fn move_to_trash(path: &Path) -> Result<(), Error> {
+    Err(Error::Custom(format!(
+        "move to trash is not supported on this platform: '{}'",
+        path.display()
+    )))
 }
 
 pub fn write_string_file(path: &Path, content: &str) -> Result<(), Error> {

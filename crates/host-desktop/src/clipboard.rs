@@ -25,12 +25,14 @@ pub struct ClipboardImage {
     pub data_base64: String,
 }
 
+#[cfg(any(windows, target_os = "linux", target_os = "macos"))]
 pub fn get_clipboard_text() -> Result<String, Error> {
     let mut clipboard =
         arboard::Clipboard::new().map_err(|e| Error::Custom(format!("clipboard: {e}")))?;
     Ok(clipboard.get_text().unwrap_or_default())
 }
 
+#[cfg(any(windows, target_os = "linux", target_os = "macos"))]
 pub fn read_clipboard_image() -> Result<Option<ClipboardImage>, Error> {
     let mut clipboard =
         arboard::Clipboard::new().map_err(|e| Error::Custom(format!("clipboard: {e}")))?;
@@ -281,6 +283,23 @@ pub fn copy_image_to_clipboard(path: &str) -> Result<(), Error> {
     #[cfg(not(any(windows, target_os = "linux")))]
     Err(Error::Custom(
         "copy image to clipboard is unsupported on this platform".into(),
+    ))
+}
+
+/// Android/iOS: `arboard` has no implementation for these targets (it does not
+/// even compile there), so the dependency is desktop-only. Both entry points are
+/// advertised as `supported: false` through HostCapabilities.
+#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
+pub fn get_clipboard_text() -> Result<String, Error> {
+    Err(Error::Custom(
+        "clipboard access is not supported on this platform".into(),
+    ))
+}
+
+#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
+pub fn read_clipboard_image() -> Result<Option<ClipboardImage>, Error> {
+    Err(Error::Custom(
+        "clipboard access is not supported on this platform".into(),
     ))
 }
 
