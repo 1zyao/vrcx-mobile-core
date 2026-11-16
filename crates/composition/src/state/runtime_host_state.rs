@@ -791,6 +791,31 @@ impl RuntimeHostState {
         &self.vrchat_remote
     }
 
+    /// Remote favourite add, through the same coordinator the desktop graph uses.
+    ///
+    /// Favourites are addressed by entity id in this model (`entity_id` here,
+    /// `object_id` on delete), not by VRChat's favourite-record id.
+    pub async fn favorite_add_remote(
+        &self,
+        input: vrcx_0_application::favorites::FavoriteRemoteAddInput,
+    ) -> vrcx_0_application_core::Result<vrcx_0_contracts::vrchat_api::VrchatResponse> {
+        self.desktop_assembly()
+            .favorite_mutations()
+            .add_remote("Remote favorite mutation", input)
+            .await
+    }
+
+    /// Remote favourite delete, addressed by entity id.
+    pub async fn favorite_delete_remote(
+        &self,
+        input: vrcx_0_application::favorites::FavoriteRemoteDeleteInput,
+    ) -> vrcx_0_application_core::Result<vrcx_0_contracts::vrchat_api::VrchatResponse> {
+        self.desktop_assembly()
+            .favorite_mutations()
+            .delete_remote("Remote favorite mutation", input)
+            .await
+    }
+
     pub fn web_client(&self) -> &Arc<WebClient> {
         &self.web
     }

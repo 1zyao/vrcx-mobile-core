@@ -30,6 +30,56 @@ where
         .map_err(|error| CommandError::failed(error.to_string()))
 }
 
+/// Mirrors cloud's `VrchatFavoriteAddInput`; `favoriteId` is the ENTITY id
+/// (world/avatar/user), which is how VRCX addresses favourites.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct FavoriteAddInput {
+    #[serde(rename = "type")]
+    type_name: vrcx_0_contracts::VrchatFavoriteType,
+    #[serde(default)]
+    favorite_id: String,
+    #[serde(default)]
+    tags: String,
+}
+
+/// Mirrors cloud's `VrchatFavoriteDeleteInput` - an entity id, not a record id.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct FavoriteDeleteInput {
+    #[serde(default)]
+    object_id: String,
+}
+
+async fn app__vrchat_favorite_add(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<FavoriteAddInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let input = args.input;
+    let response = state
+        .favorite_add_remote(vrcx_0_application::favorites::FavoriteRemoteAddInput {
+            kind: input.type_name,
+            entity_id: input.favorite_id,
+            tags: input.tags,
+        })
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+async fn app__vrchat_favorite_delete(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<FavoriteDeleteInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let response = state
+        .favorite_delete_remote(vrcx_0_application::favorites::FavoriteRemoteDeleteInput {
+            object_id: args.input.object_id,
+        })
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
 /// Mirrors cloud's `VrchatFavoriteWorldsInput`; the request goes to `worlds/favorites`.
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -269,6 +319,14 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         "app__vrchat_favorite_worlds_get",
         app__vrchat_favorite_worlds_get,
     );
+    registry.register_typed::<InputArgs<FavoriteAddInput>, serde_json::Value, _, _>(
+        "app__vrchat_favorite_add",
+        app__vrchat_favorite_add,
+    );
+    registry.register_typed::<InputArgs<FavoriteDeleteInput>, serde_json::Value, _, _>(
+        "app__vrchat_favorite_delete",
+        app__vrchat_favorite_delete,
+    );
     registry.register_typed::<FavoriteListArgs, Vec<vrcx_0_contracts::FavoriteRow>, _, _>(
         "app__favorite_list",
         app__favorite_list,
@@ -356,10 +414,12 @@ mod tests {
             "app__vrchat_search_users_get",
             "app__vrchat_search_groups_get",
             "app__vrchat_favorite_worlds_get",
+            "app__vrchat_favorite_add",
+            "app__vrchat_favorite_delete",
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 17);
+        assert_eq!(registry.len(), 19);
     }
 }
 
@@ -499,6 +559,7 @@ async fn app__favorite_list(
     .map_err(|error| CommandError::failed(error.to_string()))?;
     Ok(rows)
 }
+
 
 
 
