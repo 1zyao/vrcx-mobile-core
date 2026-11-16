@@ -16,6 +16,7 @@ import {
 } from '@/ui/shadcn/sidebar';
 
 import { AppNavMenu } from './AppNavMenu';
+import { MobileNavButton } from './MobileNavButton';
 import {
     scheduleKeyboardSidebarToggleCleanup,
     useDelayedNavMenuCollapsed,
@@ -216,6 +217,7 @@ export function AppSidebar({
                     <AppNavMenu isCollapsed={navMenuCollapsed} />
                 </Sidebar>
             )}
+            <MobileNavButton />
             {!sidebarWindowMode && sidebarOpen ? (
                 <div
                     data-vrcx-0-resize="nav"

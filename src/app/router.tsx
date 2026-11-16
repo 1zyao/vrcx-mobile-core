@@ -6,7 +6,8 @@ import {
     Outlet,
     Route,
     Routes,
-    useLocation
+    useLocation,
+    useNavigate
 } from 'react-router';
 
 import { GlobalHosts } from '@/app/GlobalHosts';
@@ -19,6 +20,10 @@ import { useGlobalKeyboardShortcuts } from '@/components/layout/useGlobalKeyboar
 import { useSidebarAutoHide } from '@/components/layout/useSidebarAutoHide';
 import { useTrayShortcut } from '@/components/layout/useTrayShortcut';
 import { WindowResizeHandles } from '@/components/layout/WindowResizeHandles';
+import { MobileFeedPage } from '@/features/mobile/MobileFeedPage';
+import { MobilePlaceholderPage } from '@/features/mobile/MobilePlaceholderPage';
+import { MobileShell } from '@/features/mobile/MobileShell';
+import { useIsMobile } from '@/lib/use-mobile';
 import { cn } from '@/lib/utils';
 import { recordRouteEnter } from '@/services/telemetry/telemetryPageReach';
 import {
@@ -203,6 +208,23 @@ function AppRouterContent() {
     const isWindowsHost = hostPlatform === 'windows';
     const hasCustomWindowFrame =
         isWindowsHost && !window.__VRCX_SYSTEM_WINDOW_FRAME__;
+    // On a phone the desktop title bar is pure chrome (window buttons that mean
+    // nothing there); the /m shell draws its own top bar instead.
+    const hideDesktopChrome = useIsMobile();
+
+    // A phone always lands on the /m shell. The desktop pages are table-centric
+    // and are not meant to render at this width, and the remembered route may
+    // point at one of them from a previous desktop session.
+    const navigateToMobileEntry = useNavigate();
+    useEffect(() => {
+        if (!hideDesktopChrome || pathname.startsWith('/m')) {
+            return;
+        }
+        if (pathname === '/login') {
+            return;
+        }
+        navigateToMobileEntry('/m/feed', { replace: true });
+    }, [hideDesktopChrome, pathname, navigateToMobileEntry]);
 
     return (
         <QuickSearchProvider enabled={sessionReady}>
@@ -219,7 +241,11 @@ function AppRouterContent() {
                     aria-hidden="true"
                     className="vrcx-0-background-image-transition-layer"
                 />
-                {isMacHost ? <MacOverlayTitleBar /> : <AppTitleBar />}
+                {hideDesktopChrome ? null : isMacHost ? (
+                    <MacOverlayTitleBar />
+                ) : (
+                    <AppTitleBar />
+                )}
                 <div
                     data-vrcx-0-surface="route-host"
                     className="vrcx-0-route-host min-h-0 flex-1 overflow-hidden"
@@ -243,7 +269,16 @@ function AppRouterContent() {
                                 <Route element={<AppShellRoute />}>
                                     <Route
                                         index
-                                        element={<RememberedPageRedirect />}
+                                        element={
+                                            hideDesktopChrome ? (
+                                                <Navigate
+                                                    to="/m/feed"
+                                                    replace
+                                                />
+                                            ) : (
+                                                <RememberedPageRedirect />
+                                            )
+                                        }
                                     />
                                     {protectedRoutes.map((route) => (
                                         <Route
@@ -255,7 +290,71 @@ function AppRouterContent() {
                                     <Route
                                         path="*"
                                         element={
-                                            <Navigate to="/feed" replace />
+                                            <Navigate
+                                                to={
+                                                    hideDesktopChrome
+                                                        ? '/m/feed'
+                                                        : '/feed'
+                                                }
+                                                replace
+                                            />
+                                        }
+                                    />
+                                </Route>
+
+                                {/*
+                                 * Phone shell. A separate route tree rather than
+                                 * a responsive variant of the desktop one: the
+                                 * desktop pages are table-centric and cannot be
+                                 * made usable by breakpoints alone. These pages
+                                 * reuse the same repositories and stores, so
+                                 * there is only one data layer.
+                                 */}
+                                <Route path="/m" element={<MobileShell />}>
+                                    <Route
+                                        index
+                                        element={
+                                            <Navigate to="/m/feed" replace />
+                                        }
+                                    />
+                                    <Route
+                                        path="feed"
+                                        element={<MobileFeedPage />}
+                                    />
+                                    <Route
+                                        path="friends"
+                                        element={
+                                            <MobilePlaceholderPage
+                                                title="好友"
+                                                note="移动端好友页还没做"
+                                            />
+                                        }
+                                    />
+                                    <Route
+                                        path="notifications"
+                                        element={
+                                            <MobilePlaceholderPage
+                                                title="通知"
+                                                note="移动端通知页还没做"
+                                            />
+                                        }
+                                    />
+                                    <Route
+                                        path="search"
+                                        element={
+                                            <MobilePlaceholderPage
+                                                title="搜索"
+                                                note="移动端搜索页还没做"
+                                            />
+                                        }
+                                    />
+                                    <Route
+                                        path="me"
+                                        element={
+                                            <MobilePlaceholderPage
+                                                title="我的"
+                                                note="移动端个人页还没做"
+                                            />
                                         }
                                     />
                                 </Route>

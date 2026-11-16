@@ -222,8 +222,7 @@
     );
     --vrcx-0-main-content-preferred-min-width: 45rem;
     --vrcx-0-side-panel-min-width: 15rem;
-    --vrcx-0-side-panel-resizer-width: 0.5rem;
-    --vrcx-0-resize-accent: color-mix(
+    --vrcx-0-side-panel-resizer-width: 0.5rem;    --vrcx-0-resize-accent: color-mix(
         in oklab,
         var(--primary) 55%,
         transparent
@@ -1573,4 +1572,16 @@ html[data-magicui-theme-vt='active']::view-transition-new(root) {
 ::view-transition-new(root) {
     animation: none;
     mix-blend-mode: normal;
+}
+
+/* ---- Narrow-screen (phone) layout -------------------------------------
+   Below the shadcn sidebar breakpoint of 768px (src/lib/use-mobile.ts) the
+   shell has to behave like a single pane. The 45rem / 15rem minimums above
+   were tuned for a desktop window: once a phone is that narrow they force the
+   main content down to a sliver while the right side panel keeps its width. */
+@media (max-width: 767px) {
+    :root {
+        --vrcx-0-main-content-preferred-min-width: 0rem;
+        --vrcx-0-side-panel-min-width: 0rem;
+    }
 }
