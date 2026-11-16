@@ -16,6 +16,7 @@ use vrcx_0_application::auth::{
     AutoLoginStartInput, LoginSessionCancelInput, LoginSessionEnd, LoginSessionRespondInput,
     LoginSessionStartInput,
 };
+use vrcx_0_contracts::notifications::{NotificationListItemOutput, NotificationListQueryInput};
 use vrcx_0_persistence::feed;
 
 /// Runs a synchronous persistence call off the async workers.
@@ -154,6 +155,18 @@ async fn app__feed_rows_query(
     blocking("feed rows", move || feed::feed_rows_query(&db, args.query)).await
 }
 
+async fn app__notification_list_query(
+    state: Arc<RuntimeHostState>,
+    args: QueryArgs<NotificationListQueryInput>,
+) -> Result<Vec<NotificationListItemOutput>, CommandError> {
+    // The same persistence call cloud's local_data service makes, so the phone reads notifications
+    // from its own (synced) database instead of asking VRChat.
+    let db = Arc::clone(state.database());
+    blocking("notification list", move || {
+        vrcx_0_persistence::notifications::notification_list_query(db.as_ref(), args.query)
+    })
+    .await
+}
 async fn app__vrchat_auth_session_start(
     state: Arc<RuntimeHostState>,
     input: LoginSessionStartInput,
@@ -490,6 +503,10 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         "app__vrchat_instance_get",
         app__vrchat_instance_get,
     );
+    registry.register_typed::<QueryArgs<NotificationListQueryInput>, Vec<NotificationListItemOutput>, _, _>(
+        "app__notification_list_query",
+        app__notification_list_query,
+    );
     registry.register_typed::<InputArgs<FavoriteAddInput>, serde_json::Value, _, _>(
         "app__vrchat_favorite_add",
         app__vrchat_favorite_add,
@@ -611,7 +628,7 @@ mod tests {
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 26);
+        assert_eq!(registry.len(), 27);
     }
 }
 
@@ -751,6 +768,7 @@ async fn app__favorite_list(
     .map_err(|error| CommandError::failed(error.to_string()))?;
     Ok(rows)
 }
+
 
 
 
