@@ -12,7 +12,9 @@ use std::sync::Arc;
 
 use vrcx_0_command_server::{CommandBus, CommandError, CommandRegistry, EventBus};
 use vrcx_0_composition::RuntimeHostState;
-use vrcx_0_application::auth::{LoginSessionCancelInput, LoginSessionRespondInput, LoginSessionStartInput};
+use vrcx_0_application::auth::{
+    LoginSessionCancelInput, LoginSessionEnd, LoginSessionRespondInput, LoginSessionStartInput,
+};
 use vrcx_0_persistence::feed;
 
 /// Runs a synchronous persistence call off the async workers.
@@ -59,6 +61,17 @@ async fn app__vrchat_auth_session_respond(
     serde_json::to_value(outcome).map_err(|error| CommandError::failed(error.to_string()))
 }
 
+async fn app__vrchat_auth_session_end(
+    state: Arc<RuntimeHostState>,
+    input: LoginSessionEnd,
+) -> Result<serde_json::Value, CommandError> {
+    let snapshot = state
+        .end_login_session(input)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(snapshot).map_err(|error| CommandError::failed(error.to_string()))
+}
+
 /// The command surface exposed to the phone UI.
 pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
     let mut registry = CommandRegistry::new();
@@ -77,6 +90,10 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
     registry.register_typed::<LoginSessionCancelInput, serde_json::Value, _, _>(
         "app__vrchat_auth_session_cancel",
         app__vrchat_auth_session_cancel,
+    );
+    registry.register_typed::<LoginSessionEnd, serde_json::Value, _, _>(
+        "app__vrchat_auth_session_end",
+        app__vrchat_auth_session_end,
     );
     registry
 }
@@ -104,10 +121,12 @@ mod tests {
             "app__vrchat_auth_session_start",
             "app__vrchat_auth_session_cancel",
             "app__vrchat_auth_session_respond",
+            "app__vrchat_auth_session_end",
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 4);
+        assert_eq!(registry.len(), 5);
     }
 }
+
 
