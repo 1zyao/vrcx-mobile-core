@@ -23,7 +23,11 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["net", "io-util", "time"] }
-tokio-tungstenite = { version = "0.30", features = ["rustls-tls-native-roots"] }
+# Webpki roots instead of native roots: rustls-native-certs classifies Android
+# as plain unix and reads /etc/ssl/certs, which does not exist there, so the
+# VRChat realtime websocket handshake failed with "no native root CA
+# certificates found". webpki-roots bundles Mozilla's set and works everywhere.
+tokio-tungstenite = { version = "0.30", features = ["rustls-tls-webpki-roots"] }
 tower-service = "0.3"
 url = { workspace = true }
 vrcx-0-core = { path = "../core" }

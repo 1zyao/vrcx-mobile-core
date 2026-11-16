@@ -34,32 +34,48 @@ vrchat_launch_pipe          screenshot_cache（Android 有限、iOS 基本不行
 ### 已完成
 
 - [x] `machine-uid` 按 target 门控（`3f558c8a1`）—— 桌面派生逻辑不变，老库继续可解
-      已验证：宿主机 + `aarch64-linux-android` 双通过
+- [x] `arboard` / `trash` 按 target 门控（`b2484f60f`）—— 两者都不支持 Android 且**编不过**
+      （`trash` 缺 `platform` 模块、`arboard` 缺内部 `Clipboard/Get/Set/Clear`）；
+      `move_to_trash` / 两个 clipboard 入口在移动端返回 `unsupported`
+- [x] Tauri 桌面 API 逐个门控（`17fb175dc`、`dfdf6b35b`）：tray / menu / window-state /
+      autostart / single-instance / skip_taskbar / unminimize / pick_folder，
+      builder 链按 `#[cfg] let builder = builder.plugin(...)` 拆开
+- [x] `default_app_data_dir()` 支持移动端（`49b1fd1bd`）
+      Android → `/data/user/0/<package>/files/<APP_DIR_NAME>`，package 从 `/proc/self/cmdline` 取
+      iOS → `$HOME/Library/Application Support/<APP_DIR_NAME>`；桌面分支字节级不变
+- [x] VRChat 实时 WS 的根证书 → `rustls-tls-webpki-roots`
+      `rustls-native-certs` 把 Android 当普通 unix 去读 `/etc/ssl/certs`（不存在），
+      握手直接报 `no native root CA certificates found`。现在用内置 Mozilla 根证书。
+
+**里程碑**：`cargo check --target aarch64-linux-android -p vrcx-0` **通过**，整个应用能编到 Android。
 
 ### 待做
 
-- [ ] **摘除 5 个桌面 crate**（共 49,914 行）
-      `runtime-host-desktop` 23,795 / `host-desktop` 11,592 / `overlay-runtime` 7,554 /
-      `vr-overlay-backend` 4,623 / `vr-overlay` 2,350
-      `composition` **不用改**（`RuntimeHostDesktopAssemblyDeps` 只是中性类型组合，历史误名）
-- [ ] **`RuntimeHostProfile::Mobile`** 变体（`crates/application-core`），composition 里 8 处 match
-- [ ] **新增 `runtime-host-mobile`**（预计 2–4k 行，对照 `host-desktop` 11.6k + `runtime-host-desktop` 23.8k）
-      实现：app data dir、sqlite 路径、本地通知、深链、能力位、无日志源
-- [ ] **`src-tauri` 平台分层** —— 159 个文件目前 `cfg(desktop)`/`cfg(mobile)` 各 0 处；
-      对两个桌面 crate 有 ~145 处引用散在 35 个模块，需逐个判定
-- [ ] **`default_app_data_dir()` 换实现** —— `dirs::config_dir()` 在 Android 返回 None
-      （`dirs-sys` 对 android/ios 的 `fallback()` 直接 `None`），改用 Tauri `app.path().app_data_dir()`
-- [ ] **TLS 根证书（运行时阻塞，编译不受影响）**
-      `tokio-tungstenite` 用的是 `rustls-tls-native-roots`；Android 上
-      `rustls-native-certs` 走 unix 分支读 `/etc/ssl/certs`（不存在）→ 连不上 VRChat 的 WS
-      → 改 `rustls-tls-webpki-roots`（内置 Mozilla 根证书）
-      注：`reqwest` 那条路走的是 `rustls-platform-verifier`（支持 Android，用系统验证器），
-      但要确认是否需要 JNI 初始化
-- [ ] **（可选）去掉 aws-lc-rs**
-      实测能在 Linux 上编过 Android，**不是阻塞**。留在图里的代价只是构建慢 + 要 cmake + 体积。
-      真要减，就把 workspace 的 `reqwest` 改成 `default-features = false` 只开需要的特性
+- [ ] **reqwest 的 HTTPS 根证书（`rustls-platform-verifier`）**
+      reqwest 0.13.5 把 `rustls-platform-verifier` 写死了，**没有** `rustls-tls-webpki-roots` 这个 feature。
+      而它在 Android 上必须调用 `rustls_platform_verifier::android::init_with_env` /
+      `init_with_runtime`（要 JNI `Env` + Android `Context`），否则证书校验直接失败。
+      两条路：
+      1. 从 Rust 导出 `android_init` JNI 函数，由 `tauri android init` 生成的 `MainActivity.kt` 调用（正规做法）
+      2. 用 `rustls-no-provider` + `use_preconfigured_tls(...)` 塞一个 webpki-roots 的
+         `ClientConfig` 进 reqwest builder（纯 Rust，和 `remote_sync_postgres.rs` 现有写法一致）
+
+      注意：`vrchat-client` 和 `integrations` 都建了 reqwest client，改动点不止一处。
+
+      **这一项不做，APK 能装上、UI 能显示，但登录 VRChat REST API 会全部 TLS 失败。**
 - [ ] **`secrets_key` 真实现** —— Android Keystore / iOS Keychain 生成随机 32 字节 key
       目前是 `None` 桩，**不能就这样发布**（cookie / PG 密码会明文落盘）
+- [ ] **出 APK**：`tauri android init` → `npm install && npm run build`（出 `dist/`）→ `tauri android build`
+- [ ] **UI 触屏化** —— 390px 下主内容仅 118px，零宽度断点，804 处右键菜单
+- [ ] **`tauri.conf.json`** —— `targets: ["nsis"]`、`decorations: false`（自绘标题栏手机上是假标题栏）、
+      `trayIcon`、`updater` 都要处理
+- [ ] **（可选）去掉 aws-lc-rs** —— 实测能编过 Android，**不是阻塞**，只是构建慢 + 要 cmake + 体积
+
+### 已作废的早期判断
+
+最初计划"摘掉 5 个桌面 crate + 新建 `runtime-host-mobile`"，实测证明**不需要**：
+把两个不兼容的 C crate 门控掉之后，`host-desktop` 和 `runtime-host-desktop` 原样就能编过 Android，
+`composition` 更是完全没动过。代价是移动端多带了一些无用代码，好处是改动面小、和上游结构一致。
 - [ ] **`game_log_watcher` 加 feature 关闭**（低优先）
       `start()` 只在 `cfg(windows)`、`start_without_process_monitor()` 只在 `cfg(linux)`。
       实测 Android 上**不报错**，只是这些函数变成 dead code（11 条 warning）。
