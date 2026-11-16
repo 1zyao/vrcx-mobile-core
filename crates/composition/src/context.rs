@@ -645,3 +645,16 @@ impl RuntimeHostContext {
             .await
     }
 }
+
+impl RuntimeHostContext {
+    /// Saved credentials snapshot (redacted), used to restore a session on launch.
+    ///
+    /// `saved_snapshot` is a free function over the credential store, so no host
+    /// method is needed - the context already owns the store.
+    pub fn saved_auth_snapshot(
+        &self,
+    ) -> vrcx_0_application_core::Result<vrcx_0_application::auth::SavedAuthSnapshot>
+    {
+        vrcx_0_application::auth::saved_snapshot(self.auth_credentials.as_ref())
+    }
+}

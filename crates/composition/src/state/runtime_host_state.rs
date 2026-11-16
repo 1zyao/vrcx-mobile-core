@@ -825,3 +825,13 @@ impl RuntimeHostState {
 
 
 
+
+impl RuntimeHostState {
+    /// Saved credentials snapshot, see [`RuntimeHostContext::saved_auth_snapshot`].
+    pub fn saved_auth_snapshot(
+        &self,
+    ) -> vrcx_0_application_core::Result<vrcx_0_application::auth::SavedAuthSnapshot>
+    {
+        self.runtime_context.saved_auth_snapshot()
+    }
+}
