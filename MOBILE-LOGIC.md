@@ -732,3 +732,72 @@ GET /auth/user/favoritelimits  → app__social_favorites_baseline_get
 
 所以下一步不是"逐条补命令"，而是**一次把 social 运行时移植进 fork**，
 然后 friends / favoritelimits / 通知 三块可以一起翻。
+
+---
+
+# 第 27 轮：还剩多少直连（源码级审计）
+
+运行时日志只能证明"点过的页面没走 proxy"，源码审计能列出**所有**仍可能直连的调用点。
+下表是 `composeApp/src/commonMain/kotlin/network/api/` 里仍在用 `client.get/post/put/delete` 的方法，
+它们经 `CoreHttpEngine` → `app__web_execute` 透传，运行时就表现为
+`proxy GET https://api.vrchat.cloud/...`。
+
+## 已清零（运行时验证：0 条 proxy）
+
+| 域 | 方法 |
+|---|---|
+| 登录/会话 | `auth_session_*`、`auto_login_start`、`current_user` |
+| 好友 | `friendsFlow`（roster baseline + presence 合并） |
+| 收藏 | `fetchFavorite`、`getFavoriteGroupsByType`、`getFavoriteLimits`、`deleteFavorite` |
+| 用户 | `fetchUser`、`fetchUserRaw`、profile 读取 |
+| 群组 | `fetchGroup` |
+| 实例 | `instanceByLocation` |
+| 通知 | `fetchNotifications`、`fetchNotificationsV2` |
+| 动态 | `feed_rows_query`（本地读模型） |
+
+## 仍走透传的方法（按文件）
+
+```
+AuthApi              approveDevice, deviceAuthInfo, isAuthed, userRes, verify
+AvatarModerationApi  blockAvatar, getAvatarModerations, unblockAvatar
+AvatarsApi           deleteAvatar, deleteImpostor, enqueueImpostor, getAvatarById, getAvatars,
+                     getAvatarStyles, getFavoritedAvatars, getImpostorQueueStats, selectAvatar,
+                     selectFallbackAvatar, updateAvatar
+EconomyApi           getCreditsBalance
+FavoriteApi          addFavorite, clearFavoriteGroup, updateFavoriteGroup
+FeedbackApi          reportConfig, submitReport
+FileApi              deleteFile, findImageFileLocal, getAvatarGalleryFiles, getFileInfo, getFiles
+FriendsApi           deleteFriendRequest, sendFriendRequest, unfriend
+GroupsApi            getGroupGalleryImages, getGroupInstances, getGroupMembers, getGroupPosts,
+                     getUserGroupInstances, joinGroup, leaveGroup, searchGroups,
+                     updateGroupNotifications, updateRepresentation
+InstancesApi         closeInstance, closeStatus, createInstance
+InventoryApi         getInventory, getTemplate, redeemReward
+InviteApi            getInviteMessages, inviteMyselfToInstance, inviteUser, requestInvite,
+                     resetInviteMessage, updateInviteMessage
+NotificationApi      acceptFriendRequest, clearAllNotifications, deleteNotification,
+                     deleteNotificationV2, markLegacyNotificationAsRead,
+                     markPipelineNotificationAsRead, responseNotification
+Player*ModerationApi get, moderate, remove / getForTarget
+PrintsApi            deletePrint, getPrint, getUserPrints
+ProfileAppearanceApi update
+UsersApi             addTags, blockUser, boop, createPlayerInteractionOverride,
+                     deleteWorldPersistence, getMutualFriends, getPlayerInteractionSnapshot,
+                     getRepresentedGroup, getUserGroups, hasWorldPersistence, isUserBlocked,
+                     removePlayerInteractionOverride, removeTags, saveUserNote, unblockUser,
+                     updateUserInfo
+VrchatStatusApi      fetchStatus
+WorldsApi            deleteWorld, getFavoritedWorlds, getRecentWorlds, getWorldById,
+                     getWorldInstanceById, getWorldPublishStatus, publishWorld, searchWorld,
+                     unpublishWorld, updateWorld
+```
+
+## 下一步的顺序（按页面触发频率）
+
+1. **世界详情** `getWorldById` → `app__world_get`（VRCX 前端用的就是它，本地读模型；fork 缺实现，正在移植）
+2. **群组成员/公告/画廊** → `app__vrchat_group_members_get` / `_posts_get` / `_gallery_get`
+3. **模型列表/详情** → `app__vrchat_avatar_get` / `app__avatars_by_user`（门面已有）
+4. **搜索世界** → `app__vrchat_search_worlds_get`（门面已有）
+5. **写操作**（好友请求、邀请、收藏增删、封禁…）→ 用规范写命令，不是读模型
+
+写操作要格外小心：它们是真正会改账号数据的，验证只能用"反序列化阶段失败"的方式（见第 15 轮的做法），不能拿真实账号试。
