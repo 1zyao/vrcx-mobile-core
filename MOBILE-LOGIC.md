@@ -667,3 +667,68 @@ proxy GET https://api.vrchat.cloud/api/1/profile/usr_ed329568-…?with=…
 
 （本轮 `su` 不可用，`backend.url` 没写进设备，所以 app 走的是进程内核心 ——
 正好就是用户要的形态。）
+
+---
+
+# 第 18 轮：配额的真实来源（查 VRCX 前端得出）
+
+## 问题
+
+VRCM 的收藏页显示 `avatars1 24/50` 这样的配额，来自 `GET /auth/user/favoritelimits`。
+这条在 VRCX 的命令面里**没有对应**，我上一轮提了三个选项 (a) 保留 proxy / (b) 从组数据推算 / (c) 不显示。
+
+## 查证：VRCX 前端怎么拿配额
+
+```
+D:\vrcx0\src\src\state\favoriteStore.ts:101
+    favoriteLimits: cloneFavoriteLimits(snapshot.favoriteLimits),
+```
+
+→ 前端**不请求** favoritelimits，它从运行时快照里取。
+
+核心侧的证据：
+
+```
+crates/application-realtime/src/social_baseline/types.rs
+    pub struct FavoriteBaselineSnapshot {
+        pub favorite_limits: RawJson,              ← 配额
+        pub favorite_friend_groups: Vec<FavoriteGroupOutput>,
+        pub favorite_world_groups:  Vec<FavoriteGroupOutput>,
+        …
+    }
+
+    pub struct FavoriteGroupOutput {
+        pub key, type_name, name, display_name, visibility,
+        pub capacity: i64,                         ← 每组上限（50）
+        pub count:    i64,                         ← 已用（24）
+    }
+```
+
+```
+crates/application-realtime/src/social_baseline/service/favorites.rs
+    build_favorite_groups_from_limits(&favorite_limits)   ← 核心自己把 limits 摊成组+capacity
+    MAX_FAVORITE_GROUPS_KEY     = "maxFavoriteGroups"
+    MAX_FAVORITES_PER_GROUP_KEY = "maxFavoritesPerGroup"
+```
+
+## 结论：三个选项都不对，正确答案是第四个
+
+配额是 **social baseline 的一部分**：核心自己取 `/auth/user/favoritelimits`，
+把 `maxFavoritesPerGroup` 摊成每组的 `capacity`，连同 `count` 一起放进基线快照。
+所以手机端应该读 `app__social_favorites_baseline_get`，而不是自己调 limits。
+
+这也意味着 `24/50` 这个显示**能精确还原**（`count`/`capacity`），不需要估算。
+
+## 顺带看清的一件事：剩余 proxy 请求收敛到同一个缺失件
+
+```
+GET /auth/user/friends         → app__social_friend_roster_baseline_get
+GET /auth/user/favoritelimits  → app__social_favorites_baseline_get
+（大概率）GET /notifications    → 同族的 notification 服务
+```
+
+三个域都依赖 **social baseline 服务**，而 fork 里没有它（cloud 在
+`crates/runtime-host-server/src/social.rs`，`ServerSocialRuntime`，14 个依赖字段）。
+
+所以下一步不是"逐条补命令"，而是**一次把 social 运行时移植进 fork**，
+然后 friends / favoritelimits / 通知 三块可以一起翻。
