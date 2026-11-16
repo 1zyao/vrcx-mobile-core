@@ -1123,3 +1123,45 @@ http.webSocket(wsUrl)                     // ✅
 
 事件的实际内容还没验（需要已认证会话才会产生 presence/notification），
 但管道两端都已证明可用。
+
+---
+
+## 事件内容端到端验证通过（2026-11-17，真机）
+
+```
+I VrcxCore: core ready on port 34665
+I VrcxCore: event stream connecting to http://127.0.0.1:34665
+I VrcxCore: event connected: null
+I VrcxCore: event probeEvent: {"ok":true}      ← 核心推的事件被 Kotlin 收到
+I VrcxCore: probe vrchatGet(config) ok: {...}  ← 命令通道同时可用
+```
+
+完整推送链：
+
+```
+Rust RuntimeEventBus → BridgeSink → EventBus 广播
+  → GET /api/events (WS) → Ktor client → Flow → collector
+```
+
+用 `app__debug_emit_event` 触发（临时诊断命令），因为真实事件（presence/notification）
+只在已认证会话下产生，无法在登录前验证。
+
+### 两个真 bug
+
+**1. `build-core.ps1 -Abi x86_64` 静默什么都不做**
+
+```powershell
+$targets = @{ 'x86_64' = '...'; 'arm64-v8a' = '...' }
+if ($Abi -ne 'all') { $targets = $targets | Where-Object { $_.Key -eq $Abi } }  # → 变成数组
+foreach ($abi in $targets.Keys) { ... }    # 数组没有 .Keys → 循环体不执行
+```
+
+结果：退出码 0，但既没编译也没复制。我因此连续两轮装到旧 `.so`，
+看到 `app__debug_emit_event is not available on this transport` 还以为是命令注册问题。
+
+改成列表 + `$entry.Abi` 之后正常。
+
+**教训**：脚本"成功退出"不等于"做了事"。凡是幂等操作（编译+复制），
+都应该打印实际产物（路径 + 大小 + mtime），否则静默空转无法察觉。
+
+**2. Ktor 只对 `ws://` 做升级**（上一轮已修）

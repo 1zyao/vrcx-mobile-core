@@ -137,6 +137,10 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         "app__vrchat_auth_auto_login_start",
         app__vrchat_auth_auto_login_start,
     );
+    registry.register_typed::<DebugEmitInput, serde_json::Value, _, _>(
+        "app__debug_emit_event",
+        app__debug_emit_event,
+    );
     registry.register_typed::<WebExecuteInput, serde_json::Value, _, _>(
         "app__web_execute",
         app__web_execute,
@@ -147,6 +151,7 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
 /// Router state for `serve_loopback`.
 pub fn build_bus(state: RuntimeHostState) -> Arc<CommandBus<RuntimeHostState>> {
     let events = EventBus::new(256);
+    let _ = DEBUG_EVENTS.set(events.clone());
     state.event_bus().set_sink(BridgeSink(events.clone()));
     Arc::new(CommandBus {
         registry: Arc::new(build_registry()),
@@ -177,7 +182,7 @@ mod tests {
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 9);
+        assert_eq!(registry.len(), 10);
     }
 }
 
@@ -235,4 +240,31 @@ impl vrcx_0_application_core::RuntimeEventSink for BridgeSink {
         self.0.publish(event.to_string(), payload);
     }
 }
+
+
+/// Temporary diagnostic: publish an arbitrary event into the transport broadcast.
+///
+/// Exists so the push path can be exercised without an authenticated session - the
+/// real events (presence, notifications) only appear after login, which makes the WS
+/// impossible to verify end to end otherwise. Remove once real events flow.
+async fn app__debug_emit_event(
+    _state: Arc<RuntimeHostState>,
+    input: DebugEmitInput,
+) -> Result<serde_json::Value, CommandError> {
+    let bus = DEBUG_EVENTS
+        .get()
+        .ok_or_else(|| CommandError::failed("event bus not initialised"))?;
+    bus.publish(input.name.clone(), input.payload.clone());
+    Ok(serde_json::json!({ "published": input.name }))
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DebugEmitInput {
+    name: String,
+    #[serde(default)]
+    payload: serde_json::Value,
+}
+
+static DEBUG_EVENTS: std::sync::OnceLock<EventBus> = std::sync::OnceLock::new();
 
