@@ -7744,6 +7744,17 @@ export type SyncDeviceRecord = {
     appVersion: string;
     /**  Human-readable machine name (hostname) reported by the device. */
     deviceName?: string;
+    /**
+     *  Collector role this device advertises in `_sync_devices.role`.
+     *
+     *  `auto` (default) yields to any fresh `forced` peer and to any
+     *  `auto` peer with a smaller device id; `forced` never yields (two
+     *  forced devices both collect — manual double-write, as documented).
+     *  This mirrors the `VRCX_FeedCollector` tri-state that shipped in
+     *  VRCX-K: a 24/7 server sets `forced`, desktops stay `auto` and let
+     *  it collect, so no two nodes ever record the same friend event.
+     */
+    role?: string;
     /**  Server-captured client address (PostgreSQL inet_client_addr). */
     ipAddr?: string;
     /**  Server-clock timestamp of the device's last heartbeat (per cycle). */
