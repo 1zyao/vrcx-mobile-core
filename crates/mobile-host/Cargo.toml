@@ -12,3 +12,6 @@ tokio = { workspace = true, features = ["rt", "macros", "sync"] }
 tracing = { workspace = true }
 vrcx-0-command-server = { path = "../command-server" }
 vrcx-0-persistence = { path = "../persistence" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["net", "io-util", "rt", "macros", "sync"] }

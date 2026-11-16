@@ -332,3 +332,41 @@ offlineRows = sortRows(rowsByIds(offlineIds, friendsById).filter(f =>
   sameInstanceGroups: [], favoriteGroupSections: [], favoriteRows: [],
   openGroups, prefs, rowsLength: onlineRows.length + ..., t })`
 —— 先只出「在线 / 活跃中 / 离线」三段，同房间分组和收藏随后补。
+
+---
+
+## 完整性标签修复（2026-11-16）
+
+工作区原先是 **Low integrity + No-Write-Up**：
+
+```
+D:\vrcx0         Mandatory Label\Low Mandatory Level:(OI)(CI)(NW)
+D:\Tools\...\registry   无标签（默认 Medium）
+```
+
+cargo 拉起的 build script 子进程因此在 Medium 位置（`%TEMP%`、cargo registry）写入被拒，
+表现为两大类失败：
+
+- `clang: unable to make temporary file: Permission denied`（编 `.S` 时）
+- `tauri-plugin: failed to create .tauri directory`（插件无法 provision Android 模块
+  → 插件 Kotlin 类进不了 APK → 启动 `ClassNotFoundException` 崩溃）
+
+修复：
+
+```powershell
+icacls 'D:\vrcx0'        /setintegritylevel '(OI)(CI)M'
+icacls 'D:\vrcx0\mobile' /setintegritylevel '(OI)(CI)M'
+```
+
+**实测结果**：`cargo build --target aarch64-linux-android -p vrcx-0-vrchat-client`
+（会编 ring 的 `.S`）**不带 `CFLAGS=-save-temps=obj`** 也通过了，0 temp-file 错误。
+
+因此以下两个临时方案可以退役（待重新验证 APK 构建后删除）：
+
+| 临时方案 | 状态 |
+|---|---|
+`CFLAGS_aarch64_linux_android=-save-temps=obj` | 已不需要 |
+`DOCS_RS=1`（跳过插件 provision） | 应可去掉，插件能正常写 registry 了 |
+`vendor/`（1.19 GB，为了绕开写入限制） | 也许可以去掉，待验证 |
+
+注：`std::env::temp_dir()` 在测试里已改为工作区目录，可保留（无害且更快）。
