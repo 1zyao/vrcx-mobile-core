@@ -49,17 +49,21 @@ vrchat_launch_pipe          screenshot_cache（Android 有限、iOS 基本不行
       对两个桌面 crate 有 ~145 处引用散在 35 个模块，需逐个判定
 - [ ] **`default_app_data_dir()` 换实现** —— `dirs::config_dir()` 在 Android 返回 None
       （`dirs-sys` 对 android/ios 的 `fallback()` 直接 `None`），改用 Tauri `app.path().app_data_dir()`
-- [ ] **TLS 收口**
-      - `reqwest 0.13` 默认 = rustls + **aws-lc-rs**（要 cmake + 大量 `.S` 汇编）
-        → workspace 改 `default-features = false` 只开需要的特性
-      - `tokio-tungstenite` 用 `rustls-tls-native-roots`
-        → Android 上 `rustls-native-certs` 走 unix 分支读 `/etc/ssl/certs`（不存在）→ 连不上 VRChat
-        → 改 `rustls-tls-webpki-roots`（内置 Mozilla 根证书）
-      - 备选：reqwest 已带进 `rustls-platform-verifier`，它支持 Android，但要 JNI 初始化
+- [ ] **TLS 根证书（运行时阻塞，编译不受影响）**
+      `tokio-tungstenite` 用的是 `rustls-tls-native-roots`；Android 上
+      `rustls-native-certs` 走 unix 分支读 `/etc/ssl/certs`（不存在）→ 连不上 VRChat 的 WS
+      → 改 `rustls-tls-webpki-roots`（内置 Mozilla 根证书）
+      注：`reqwest` 那条路走的是 `rustls-platform-verifier`（支持 Android，用系统验证器），
+      但要确认是否需要 JNI 初始化
+- [ ] **（可选）去掉 aws-lc-rs**
+      实测能在 Linux 上编过 Android，**不是阻塞**。留在图里的代价只是构建慢 + 要 cmake + 体积。
+      真要减，就把 workspace 的 `reqwest` 改成 `default-features = false` 只开需要的特性
 - [ ] **`secrets_key` 真实现** —— Android Keystore / iOS Keychain 生成随机 32 字节 key
       目前是 `None` 桩，**不能就这样发布**（cookie / PG 密码会明文落盘）
-- [ ] **`game_log_watcher` cfg 补全** —— `start()` 只在 `cfg(windows)`、
-      `start_without_process_monitor()` 只在 `cfg(linux)`，Android 两者都没有；建议加 feature 关闭
+- [ ] **`game_log_watcher` 加 feature 关闭**（低优先）
+      `start()` 只在 `cfg(windows)`、`start_without_process_monitor()` 只在 `cfg(linux)`。
+      实测 Android 上**不报错**，只是这些函数变成 dead code（11 条 warning）。
+      加 feature 只是为了让 Android 构建干净、并明确表达"日志源不存在"
 - [ ] **`tauri.conf.json`** —— `targets: ["nsis"]`、`decorations: false`（自绘标题栏手机上是假标题栏）、
       `trayIcon`、`updater` 都要处理
 
@@ -93,13 +97,36 @@ cargo check --target aarch64-linux-android -p <crate>
 - `-j 1` 仍失败 ⇒ 不是并发争用；手工用同样命令编同一个 `.S` 反而成功
 - ⇒ 本机环境特有，不是项目问题。可在 WSL / Linux / macOS CI 上验证
 
-### 已验证能过的
+### 已验证能过的（WSL Ubuntu + NDK r27d，`--target aarch64-linux-android`）
 
 ```
-contracts, core, vrchat-protocol, runtime-event, i18n   ✅
-platform（本分支修复后）                                 ✅
-persistence (46,616 行；sqlite3.c + zstd 经 NDK clang)  ✅
+vrcx-0-composition 及其全部依赖    ✅ 1m08s，0 warning
+  ↳ application / application-core / application-sync / application-activity
+    application-realtime / application-game
+  ↳ persistence 46,616 行        ← libsqlite3-sys(sqlite3.c) + zstd-sys
+  ↳ media                        ← libwebp-sys
+  ↳ outbound-adapters            ← rusqlite / tokio-postgres / rustls / ring
+  ↳ integrations, vrchat-client  ← reqwest / hyper-rustls / rustls-platform-verifier
+                                   tokio-tungstenite / aws-lc-sys
+platform / contracts / core / vrchat-protocol / runtime-event / i18n   ✅
+integration-api / assistant / mcp / logger-protocol                   ✅
 ```
+
+5 个 C 库全部编过：`aws-lc-sys`、`libsqlite3-sys`、`libwebp-sys`、`ring`、`zstd-sys`。
+
+**结论：中性核心（约 215k 行）100% 能编到 Android。**
+
+### 唯一编不过的地方
+
+```
+cargo check --target aarch64-linux-android -p vrcx-0
+  error[E0433]: cannot find module or crate `platform` in this scope
+  error[E0599]: no method named `delete_all_canonicalized` found for `&TrashContext`
+  error: could not compile `trash` (lib)
+```
+
+`src-tauri` → `host-desktop` → **`trash`** 不支持 Android。这就是那道桌面边界，
+正好印证了「摘掉 5 个桌面 crate」是 M1 的主要工作。
 
 ---
 
