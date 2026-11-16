@@ -9982,6 +9982,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "vrcx-0-mobile-host"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "vrcx-0-command-server",
+ "vrcx-0-persistence",
+]
+
+[[package]]
 name = "vrcx-0-osc"
 version = "0.1.0"
 

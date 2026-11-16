@@ -1,0 +1,14 @@
+[package]
+name = "vrcx-0-mobile-host"
+version = "0.1.0"
+edition = "2021"
+license.workspace = true
+description = "Host state and command set for the in-process mobile core"
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["rt", "macros", "sync"] }
+tracing = { workspace = true }
+vrcx-0-command-server = { path = "../command-server" }
+vrcx-0-persistence = { path = "../persistence" }
