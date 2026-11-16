@@ -30,6 +30,31 @@ where
         .map_err(|error| CommandError::failed(error.to_string()))
 }
 
+/// Mirrors cloud's `VrchatFavoriteGroupsInput`.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct FavoriteGroupsInput {
+    #[serde(default)]
+    n: i32,
+    #[serde(default)]
+    offset: i32,
+    #[serde(default)]
+    owner_id: String,
+}
+
+async fn app__vrchat_favorite_groups_get(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<FavoriteGroupsInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let input = args.input;
+    let response = state
+        .vrchat_remote()
+        .favorite_groups(input.n, input.offset, input.owner_id)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
 /// Mirrors cloud's `VrchatFavoriteAddInput`; `favoriteId` is the ENTITY id
 /// (world/avatar/user), which is how VRCX addresses favourites.
 #[derive(serde::Deserialize)]
@@ -319,6 +344,10 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         "app__vrchat_favorite_worlds_get",
         app__vrchat_favorite_worlds_get,
     );
+    registry.register_typed::<InputArgs<FavoriteGroupsInput>, serde_json::Value, _, _>(
+        "app__vrchat_favorite_groups_get",
+        app__vrchat_favorite_groups_get,
+    );
     registry.register_typed::<InputArgs<FavoriteAddInput>, serde_json::Value, _, _>(
         "app__vrchat_favorite_add",
         app__vrchat_favorite_add,
@@ -416,10 +445,11 @@ mod tests {
             "app__vrchat_favorite_worlds_get",
             "app__vrchat_favorite_add",
             "app__vrchat_favorite_delete",
+            "app__vrchat_favorite_groups_get",
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 19);
+        assert_eq!(registry.len(), 20);
     }
 }
 
@@ -559,6 +589,7 @@ async fn app__favorite_list(
     .map_err(|error| CommandError::failed(error.to_string()))?;
     Ok(rows)
 }
+
 
 
 
