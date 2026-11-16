@@ -304,3 +304,31 @@ D:\Tools\...\registry       ← 无标签（默认 Medium）
 `src/features/mobile/MobileFriendRows.tsx` 已实现 `MobileSectionHeader` / `MobileFriendRow`，
 直接吃 `SidebarVirtualRow`；`userImage()` 返回普通 https URL（`/image/<fileId>/<version>/<res>`），
 不需要注册 `vrcx-0-img:` 协议（那是本地文件专用）。
+
+### 好友行的切分逻辑（已抄下，`FriendsSidebar.tsx`）
+
+```ts
+// 242: 主表
+rows = rowsByIds(filterIdsByQuery(orderedFriendIds, friendsById, filterText), friendsById)
+
+// 507 / 532 / 555：三段切分
+onlineRows  = sortRows(rowsByIds(visibleOnlineIds, friendsById).filter(f =>
+                !excludedFavoriteIds.has(normalizeId(f.id)) &&
+                !(prefs.isHideFriendsInSameInstance && sameInstanceIds.has(f.id))), prefs, ...)
+activeRows  = sortActiveRows(rowsByIds(activeIds,  friendsById).filter(f =>
+                !(prefs.isHideFriendsInSameInstance && sameInstanceIds.has(f.id))), prefs, ...)
+offlineRows = sortRows(rowsByIds(offlineIds, friendsById).filter(f =>
+                !(prefs.isHideFriendsInSameInstance && sameInstanceIds.has(f.id))), prefs, ...)
+```
+
+### 还剩的未确认项（下一轮开工前先确认这 6 个名字的来源）
+
+`friendsById`、`orderedFriendIds`、`visibleOnlineIds`、`activeIds`、`offlineIds`、
+`rowsByIds` / `sortRows` / `sortActiveRows` / `filterIdsByQuery` 的 import 与参数签名，
+以及 `sortRows` 尾部传的 `prefs` / `sortContext`。
+
+拿到这些就能一次写完 `useMobileFriendBoard()`：
+`sections = buildFriendsSidebarVirtualRows({ onlineRows, activeRows, offlineRows,
+  sameInstanceGroups: [], favoriteGroupSections: [], favoriteRows: [],
+  openGroups, prefs, rowsLength: onlineRows.length + ..., t })`
+—— 先只出「在线 / 活跃中 / 离线」三段，同房间分组和收藏随后补。
