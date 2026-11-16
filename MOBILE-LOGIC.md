@@ -358,3 +358,82 @@ app__social_friend_roster_baseline_get   → 基线快照
 
 只有这份核查结论。下一步先 curl 验证 `app__social_friend_roster_baseline_get`
 的真实返回结构，再决定 A 的合并逻辑。
+
+---
+
+# 第 7 轮：决定「原数据层丢弃」+ 迁移清单
+
+## 决定（用户明确）
+
+> 就是要让 VRCM 变成那个前端，它原来的数据层丢弃。
+
+所以 `network/` **不是适配层，是要被删除的层**。上一轮我提的"保留 Api 类只改方法体"
+被否掉。
+
+## 已做
+
+`FriendActivityTimelineModel` 在配置了独立后端时改用后端读模型：
+
+```kotlin
+constructor(service: FriendActivityService) : this(
+    if (VrcxBackend.isRemote) BackendFriendActivityTimelineSource(vrcxCoreClient())
+    else ServiceFriendActivityTimelineSource(service)
+)
+```
+
+编译通过（28s）。这是第一个「页面数据来自后端读模型」的接点。
+
+## 迁移清单（按调用点数量排序，决定动手顺序）
+
+```
+FriendsApi                     3 个文件   ← 但需要 social 服务移植
+AvatarModerationApi            3 个文件
+AuthApi                        4 个文件
+EconomyApi                     4 个文件
+PrintsApi                      4 个文件
+FavoriteApi                    5 个文件
+PlayerChatboxModerationApi     5 个文件
+NotificationApi                6 个文件
+InventoryApi                   6 个文件
+InstancesApi                   7 个文件
+ProfileAppearanceApi           7 个文件
+PlayerModerationApi            7 个文件
+AvatarsApi                    11 个文件
+WorldsApi                     14 个文件
+GroupsApi                     14 个文件
+FileApi                       15 个文件
+InviteApi                     15 个文件
+UsersApi                      23 个文件
+```
+
+`network/api/` 下共 **22 个 Api 类**。
+
+## 动手顺序（不是按数量，而是按「后端是否已有对应能力」）
+
+**第 1 批（后端已有，纯 db 读）**
+```
+feed        ✅ app__feed_rows_query 已验证 → 已接线
+favorites   app__* favorites 相关（待 curl 验证）
+avatars     app__* avatar 相关（待 curl 验证）
+```
+
+**第 2 批（需要移植 social / moderation 服务）**
+```
+friends     app__social_friend_roster_baseline_get
+notifications app__* notification 相关
+groups      app__user_groups_overview_get
+```
+
+**第 3 批（写操作，风险最高，最后做）**
+```
+InviteApi / FileApi / 各种 moderation 动作
+```
+
+## DTO 的处置（目标里的另一条约束）
+
+「契约尽量由 Rust 类型生成 Kotlin DTO，不手写同步」——
+`network/api/*/data/*` 里的 DTO 目前是 VRCM 手写的。随着各域迁移，
+这些 DTO 应换成从 Rust 契约生成的类型（feed 的 `FeedRowOutput` 就是先例：
+我现在是手工解析 JSON，长期应改为生成类型）。
+
+这一条我还没做，先记着，等第 1 批迁完后评估生成方案。
