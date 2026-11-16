@@ -149,13 +149,15 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
 }
 
 /// Router state for `serve_loopback`.
-pub fn build_bus(state: RuntimeHostState) -> Arc<CommandBus<RuntimeHostState>> {
+pub fn build_bus(state: Arc<RuntimeHostState>) -> Arc<CommandBus<RuntimeHostState>> {
     let events = EventBus::new(256);
     let _ = DEBUG_EVENTS.set(events.clone());
-    state.event_bus().set_sink(BridgeSink(events.clone()));
+    // Replaces any existing sink. A host that already forwards events elsewhere
+    // (the headless console sink) must tee instead - see BridgeSink.
+    state.event_bus().set_sink(BridgeSink::new(events.clone()));
     Arc::new(CommandBus {
         registry: Arc::new(build_registry()),
-        state: Arc::new(state),
+        state,
         events,
     })
 }
@@ -233,7 +235,13 @@ async fn app__web_execute(
 /// so `GET /api/events` delivers the same events the desktop receives over Tauri's
 /// `listen`. Without this the phone UI has no presence/notification updates - the
 /// friend board would stay empty no matter how many commands it issues.
-struct BridgeSink(EventBus);
+pub struct BridgeSink(EventBus);
+
+impl BridgeSink {
+    pub fn new(events: EventBus) -> Self {
+        Self(events)
+    }
+}
 
 impl vrcx_0_application_core::RuntimeEventSink for BridgeSink {
     fn emit(&self, event: &str, payload: serde_json::Value) {
@@ -267,4 +275,5 @@ struct DebugEmitInput {
 }
 
 static DEBUG_EVENTS: std::sync::OnceLock<EventBus> = std::sync::OnceLock::new();
+
 

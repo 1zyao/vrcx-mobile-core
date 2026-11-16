@@ -46,7 +46,7 @@ pub fn start_core(files_dir: &Path) -> Result<CoreEndpoint, String> {
         .build()
         .map_err(|error| format!("start runtime: {error}"))?;
 
-    let bus = build_bus(host);
+    let bus = build_bus(std::sync::Arc::new(host));
     let port = runtime.block_on(async move {
         let (address, handle) = serve_loopback(bus)
             .await
@@ -144,5 +144,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 }
+
 
 

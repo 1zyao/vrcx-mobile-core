@@ -377,3 +377,4 @@ fn is_runtime_stopped_event(event: &str, payload: &Value) -> bool {
         .ok()
         .is_some_and(|telemetry| telemetry.kind == BackendRuntimeTelemetryKind::RuntimeStopped)
 }
+

@@ -441,3 +441,26 @@ mod tests {
     }
 }
 
+
+/// Serves the bus on a fixed loopback port.
+///
+/// The phone uses `serve_loopback` (ephemeral, nothing else can guess it); a
+/// headless host is addressed by clients that were configured with a port, so it
+/// needs a stable one.
+pub async fn serve_on<S>(
+    bus: Arc<CommandBus<S>>,
+    port: u16,
+) -> std::io::Result<(std::net::SocketAddr, tokio::task::JoinHandle<()>)>
+where
+    S: Send + Sync + 'static,
+{
+    let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await?;
+    let address = listener.local_addr()?;
+    let app = router(bus);
+    let handle = tokio::spawn(async move {
+        if let Err(error) = axum::serve(listener, app).await {
+            tracing::error!(error = %error, "command bus stopped");
+        }
+    });
+    Ok((address, handle))
+}

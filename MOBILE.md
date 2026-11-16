@@ -1522,3 +1522,59 @@ c6ed9f2  feat: transport all VRChat traffic through the core
 5b30797  feat: load the VRCX-0 core in-process
 3f8b027  chore(release): bump version to 1.1.6   ← 1.1.6 基线
 ```
+
+---
+
+## headless 绑定：基础设施就位，接线未完成（2026-11-17）
+
+### 做了
+
+**1. `command-server::serve_on(bus, port)`** —— 固定端口
+
+手机用 `serve_loopback`（随机端口，外部猜不到）；headless 要被远端客户端按配置的端口访问，
+所以需要稳定端口。
+
+**2. `mobile-host::build_bus` 改为接受 `Arc<RuntimeHostState>`**
+
+原来是按值接收，导致调用方（headless）必须把 state 交出去，之后就不能再用了
+（headless 还要 `state.start_headless_backend_runtime(...)`）。
+
+**3. `BridgeSink` 公开 + `BridgeSink::new(events)`**
+
+让别的 host 也能复用同一个事件桥。
+
+**4. headless 加依赖**（`command-server`、`mobile-host`）
+
+### 没做完的接线
+
+headless 里 `state` 是按值持有的：
+
+```rust
+let state = RuntimeHostState::new(...)?;
+state.set_event_sink(console_sink);          // 它自己已经有 sink 了
+state.start_headless_backend_runtime(...).await
+```
+
+要接总线需要：
+1. 把 `state` 包成 `Arc`（会牵动 main.rs 里后续所有使用点）
+2. 装一个 **tee sink** —— headless 的控制台 sink 不能因为启用总线而失效，
+   两个 sink 都要收到事件
+
+我写了一版 tee sink，但它引用了未导入的 `BridgeSink`，编译失败。选择**撤掉未完成的代码**
+而不是留一个坏掉的半成品 —— headless 现在仍然编译通过，只是没有命令总线。
+
+### 验证
+
+```
+cargo check -p vrcx-0-headless -p vrcx-0-command-server -p vrcx-0-mobile-core   EXIT=0
+```
+
+### 下一步（接线的两个具体动作）
+
+```
+1. main.rs: let state = Arc::new(RuntimeHostState::new(...)?);
+2. 解析 --command-bus-port，若给出则：
+     let events = EventBus::new(256);
+     state.set_event_sink(TeeEventSink { console: console_sink.clone(), bus: BridgeSink::new(events.clone()) });
+     tokio::spawn(serve_on(build_bus(Arc::clone(&state)), port));
+```
