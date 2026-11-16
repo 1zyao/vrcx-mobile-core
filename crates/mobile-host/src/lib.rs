@@ -134,12 +134,107 @@ async fn app__vrchat_avatar_styles_get(
     serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
 }
 
+/// Canonical argument envelope for commands whose single parameter is named `input`.
+///
+/// Cloud wraps these as `arg(&args, "input")`, so the wire shape is `{"input": {...}}`.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct InputArgs<T> {
+    input: T,
+}
+
+/// Mirrors cloud's `FriendUserInput` (`{"input":{"userId":"…"}}`).
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct FriendUserInput {
+    user_id: String,
+}
+
+/// Mirrors cloud's `SearchUsersInput`; `params` is the facade's own parameter type, so
+/// the JSON is whatever that type already deserialises.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SearchUsersInput {
+    params: vrcx_0_contracts::vrchat_requests::UserSearchParams,
+}
+
+/// Mirrors cloud's `SearchGroupsInput`.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SearchGroupsInput {
+    params: vrcx_0_contracts::vrchat_requests::GroupSearchParams,
+}
+
+async fn app__vrchat_auth_current_user_get(
+    state: Arc<RuntimeHostState>,
+    _args: serde_json::Value,
+) -> Result<serde_json::Value, CommandError> {
+    let response = state
+        .vrchat_remote()
+        .current_user()
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+async fn app__vrchat_friend_status_get(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<FriendUserInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let response = state
+        .vrchat_remote()
+        .friend_status(args.input.user_id)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+async fn app__vrchat_search_users_get(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<SearchUsersInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let response = state
+        .vrchat_remote()
+        .search_users(args.input.params)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+async fn app__vrchat_search_groups_get(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<SearchGroupsInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let response = state
+        .vrchat_remote()
+        .search_groups(args.input.params)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
 /// The command surface exposed to the phone UI.
 pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
     let mut registry = CommandRegistry::new();
     registry.register_typed::<serde_json::Value, serde_json::Value, _, _>(
         "app__vrchat_avatar_styles_get",
         app__vrchat_avatar_styles_get,
+    );
+    registry.register_typed::<serde_json::Value, serde_json::Value, _, _>(
+        "app__vrchat_auth_current_user_get",
+        app__vrchat_auth_current_user_get,
+    );
+    registry.register_typed::<InputArgs<FriendUserInput>, serde_json::Value, _, _>(
+        "app__vrchat_friend_status_get",
+        app__vrchat_friend_status_get,
+    );
+    registry.register_typed::<InputArgs<SearchUsersInput>, serde_json::Value, _, _>(
+        "app__vrchat_search_users_get",
+        app__vrchat_search_users_get,
+    );
+    registry.register_typed::<InputArgs<SearchGroupsInput>, serde_json::Value, _, _>(
+        "app__vrchat_search_groups_get",
+        app__vrchat_search_groups_get,
     );
     registry.register_typed::<FavoriteListArgs, Vec<vrcx_0_contracts::FavoriteRow>, _, _>(
         "app__favorite_list",
@@ -223,10 +318,14 @@ mod tests {
             "app__web_execute",
             "app__favorite_list",
             "app__vrchat_avatar_styles_get",
+            "app__vrchat_auth_current_user_get",
+            "app__vrchat_friend_status_get",
+            "app__vrchat_search_users_get",
+            "app__vrchat_search_groups_get",
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 12);
+        assert_eq!(registry.len(), 16);
     }
 }
 
@@ -366,6 +465,7 @@ async fn app__favorite_list(
     .map_err(|error| CommandError::failed(error.to_string()))?;
     Ok(rows)
 }
+
 
 
 
