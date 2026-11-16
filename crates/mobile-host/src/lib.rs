@@ -332,6 +332,45 @@ struct SearchGroupsInput {
     params: vrcx_0_contracts::vrchat_requests::GroupSearchParams,
 }
 
+/// Mirrors cloud's `AvatarListByUserInput`.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AvatarListByUserInput {
+    #[serde(default)]
+    user_id: String,
+    #[serde(default)]
+    user: String,
+    #[serde(default)]
+    n: i32,
+    #[serde(default)]
+    offset: i32,
+    sort: vrcx_0_contracts::vrchat_requests::AvatarListSort,
+    order: vrcx_0_contracts::vrchat_requests::QueryOrder,
+    release_status: vrcx_0_contracts::vrchat_requests::ReleaseStatusFilter,
+}
+
+async fn app__vrchat_avatar_list_by_user_get(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<AvatarListByUserInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let input = args.input;
+    let response = state
+        .vrchat_remote()
+        .avatars_by_user(
+            input.user_id,
+            input.user,
+            vrcx_0_application::remote::AvatarListByUserQuery {
+                n: input.n,
+                offset: input.offset,
+                sort: input.sort,
+                order: input.order,
+                release_status: input.release_status,
+            },
+        )
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
 /// Mirrors cloud's `UserGetInput` (only the id matters for the raw read).
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -551,6 +590,10 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         "app__notification_list_query",
         app__notification_list_query,
     );
+    registry.register_typed::<InputArgs<AvatarListByUserInput>, serde_json::Value, _, _>(
+        "app__vrchat_avatar_list_by_user_get",
+        app__vrchat_avatar_list_by_user_get,
+    );
     registry.register_typed::<
         InputArgs<vrcx_0_application::favorites::FavoriteDetailsHydrateInput>,
         vrcx_0_application::favorites::FavoriteDetailsHydrateOutput,
@@ -684,7 +727,7 @@ mod tests {
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 29);
+        assert_eq!(registry.len(), 30);
     }
 }
 
@@ -824,6 +867,7 @@ async fn app__favorite_list(
     .map_err(|error| CommandError::failed(error.to_string()))?;
     Ok(rows)
 }
+
 
 
 
