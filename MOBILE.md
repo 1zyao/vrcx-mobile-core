@@ -437,3 +437,44 @@ VRCM 侧（D:\vrcm\vrcm-base，未提交）
 ```
 
 下一步：把 VRCM 的 VRCX Feed 页数据源从 JDBC/PG 换成 `VrcxCoreClient.feedRows()`。
+
+---
+
+## 纵切打通（2026-11-17，VRCM 1.1.6 基线）
+
+MuMu（x86_64）上，VRCM 进程内跑起完整 VRCX-0 运行时，并通过 loopback 命令总线取到数据：
+
+```
+I VrcxCore: core started: {"port":45675,"token":"Em_4UDhMkLe6-L2lnT4FgdQPsnGGfd6kT31BJF-rtk4"}
+I VrcxCore: feedRows ok: []
+```
+
+链路：
+
+```
+MainActivity
+  → NativeCore.start(filesDir)            JNI，唯一一次跨边界
+  → libvrcx_0_mobile.so                   117.9 MB（debug）
+      → host::build_host()                RuntimeHostStateBuilder + composition
+      → build_bus(host)                   CommandRegistry<RuntimeHostState>
+      → serve_loopback                    127.0.0.1:<ephemeral>
+  → VrcxCoreClient("http://127.0.0.1:$port", token)
+  → POST /api/invoke {cmd: app__feed_rows_query}
+  → 真实 runtime.database() → SQLite → {"ok":true,"result":[]}
+```
+
+`[]` 是正确结果：手机的本地 SQLite 是新建的，还没有 feed 行。
+
+### 途中修的两个真问题
+
+1. **Kotlin 模板字符串被 PowerShell 转义写坏**（`${'$'}{...}`）—— 已修
+2. **Android 明文流量策略拦截 loopback**：
+   `CLEARTEXT communication to 127.0.0.1 not permitted by network security policy`
+   修法：新增 `res/xml/network_security_config.xml`，只对 `127.0.0.1` / `localhost`
+   放开 cleartext，其余仍强制 HTTPS；manifest 加 `android:networkSecurityConfig`。
+
+### 遗留
+
+- `.so` debug 体积 117.9 MB —— release 待实测
+- VRCM 侧改动（3 个 Kotlin 文件 + `.so` + manifest + res/xml）尚未在该仓库提交
+- 下一步：搬 `vrchat_proxy` 的 41 条代理命令，并接 `/api/events`
