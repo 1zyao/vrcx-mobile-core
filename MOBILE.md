@@ -1759,3 +1759,39 @@ WS 收到: {"event":"headlessProbe","payload":{"ok":true}}
 ```
 
 命令面与事件面**两侧都在真进程上打通过**。
+
+---
+
+## 登录诊断已就位（2026-11-17）
+
+在 `AuthService` 的核心分支各加了一行 `println`（Android 上落到 logcat 的 `System.out`，
+因为 commonMain 没有平台日志器）：
+
+```
+[VrcxCore] login -> Authed attempt=… hasUser=true
+[VrcxCore] verify -> NeedTFA attempt=… method=totp
+[VrcxCore] restore -> null hasUser=false
+[VrcxCore] emitAuthed coreUser=true
+```
+
+目的：让你那一次手动登录变成**有信息量的测试**，而不是靠猜。这三行分别回答：
+
+1. 核心返回了哪个 phase（`Authed` / `NeedTFA` / `NeedEmailCode` / `Unauthorized`）
+2. 有没有拿到 `attemptId`（决定 2FA 能不能继续）
+3. 用户 JSON 有没有跟着回来（决定 `emitAuthed` 是否需要再发请求）
+
+### 登录验证的操作清单
+
+```
+1. MuMu 里打开 VRCM（已安装最新包）
+2. adb logcat -c  清一次
+3. 输入账号密码，点登录
+4. adb logcat | Select-String 'VrcxCore'
+```
+
+预期：
+- 如果 2FA：先看到 `login -> NeedTFA`，输入验证码后 `verify -> Authed`
+- 成功后应看到 `emitAuthed coreUser=true`（说明没再发 VRChat 请求）
+- 然后好友列表会自动经由核心加载（`FriendsApi.fetchFriendList` → 引擎 → 核心）
+
+失败时那行会带异常信息：`login failed: VrcxCoreException: ...`
