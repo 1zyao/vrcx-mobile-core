@@ -19,11 +19,13 @@ use vrcx_0_application::auth::{
 use vrcx_0_application::collections::SharedCollectionImportRuntime;
 use vrcx_0_application::favorites::{FavoriteImportRuntime, FavoriteImportRuntimeDeps};
 use vrcx_0_application::profile::{DataDirMigrationRuntime, ProfileBackupRuntime};
+use vrcx_0_application::media::MediaUploadPreprocessor;
+use vrcx_0_application::remote::{VrchatApiRuntime, VrchatRemoteFacade};
 use vrcx_0_application::social::{
     favorite_group_membership_from_baseline, AuthenticatedRuntimeDeps,
     AuthenticatedRuntimeFavoritesSink, AuthenticatedRuntimeOrchestrator, GroupApiDeps,
     GroupBanImportRuntime, NoteExportRuntime, PrintCleanupDeps, PrintCleanupQueueSink,
-    ProfileBioScanPacer, SocialMaintenanceRuntime,
+    PrintFavoritesStore, ProfileBioScanPacer, ProfileBioStore, SocialMaintenanceRuntime,
 };
 use vrcx_0_application_activity::ActivityWarmupRuntime;
 use vrcx_0_application_core::{
@@ -113,6 +115,10 @@ pub struct RuntimeHostState {
     desktop_assembly: RuntimeHostDesktopAssemblyDeps,
     pub(crate) backend_runtime: BackendRuntime,
     pub(crate) realtime_runtime: Arc<RealtimeHostRuntime>,
+    /// Shared VRChat remote facade: one implementation of the per-endpoint calls
+    /// (`app__vrchat_*`) for every host, so the mobile command surface registers the
+    /// cloud/desktop shape instead of re-deriving requests.
+    pub(crate) vrchat_remote: VrchatRemoteFacade,
     pub(crate) web: Arc<WebClient>,
     pub(crate) image_cache: Arc<ImageCache>,
     pub(crate) authenticated_runtime: AuthenticatedRuntimeOrchestrator,
@@ -539,6 +545,36 @@ impl RuntimeHostStateBuilder {
             },
             Arc::clone(&self.runtime_context.web),
         ));
+        // The facade needs the realtime runtime, so it is assembled here rather than in
+        // `RuntimeHostContext::new`. Every dependency is a real adapter already used by
+        // the desktop graph (LocalMediaUploadAdapter / LocalPrintAdapter /
+        // LocalProfileBioStore / VrchatApiRemote), not a stub.
+        let media_upload: Arc<dyn MediaUploadPreprocessor> =
+            Arc::new(vrcx_0_outbound_adapters::LocalMediaUploadAdapter::new(
+                Arc::clone(&self.web),
+            ));
+        let prints: Arc<dyn PrintFavoritesStore> = self.runtime_context.print_adapter.clone();
+        let profile_bio: Arc<dyn ProfileBioStore> =
+            Arc::new(vrcx_0_outbound_adapters::LocalProfileBioStore::new(
+                Arc::clone(&self.db),
+            ));
+        let vrchat_api = VrchatApiRuntime::new(
+            self.runtime_context.auth_scope.clone(),
+            Arc::clone(&self.runtime_context.remote_mutations),
+            Arc::new(vrcx_0_outbound_adapters::VrchatApiRemote::new(
+                Arc::clone(&self.web),
+                self.runtime_context.diagnostics.clone(),
+                self.runtime_context.sync.clone(),
+            )),
+        );
+        let vrchat_remote = VrchatRemoteFacade::new(
+            vrchat_api,
+            media_upload,
+            prints,
+            profile_bio,
+            Arc::clone(&realtime_runtime),
+            self.runtime_context.auth_scope.clone(),
+        );
         let favorites_sink = {
             let activity_router = self.runtime_context.activity_router();
             Some(Arc::new(
@@ -679,6 +715,7 @@ impl RuntimeHostStateBuilder {
             desktop_assembly: self.desktop_assembly,
             backend_runtime: self.backend_runtime,
             realtime_runtime,
+            vrchat_remote,
             web: self.web,
             image_cache: self.image_cache,
             authenticated_runtime,
@@ -743,6 +780,15 @@ impl RuntimeHostState {
 
     pub fn realtime_runtime(&self) -> &Arc<RealtimeHostRuntime> {
         &self.realtime_runtime
+    }
+
+    /// Per-endpoint VRChat remote calls (`app__vrchat_*`).
+    ///
+    /// Same facade the desktop graph uses, so a transport can register the cloud
+    /// command names against one shared implementation instead of re-deriving the
+    /// request shapes per host.
+    pub fn vrchat_remote(&self) -> &VrchatRemoteFacade {
+        &self.vrchat_remote
     }
 
     pub fn web_client(&self) -> &Arc<WebClient> {

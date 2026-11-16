@@ -114,9 +114,33 @@ async fn app__vrchat_auth_auto_login_start(
     serde_json::to_value(outcome).map_err(|error| CommandError::failed(error.to_string()))
 }
 
+/// Avatar styles, same name and argument shape as the cloud/desktop command
+/// (`registry.register("app__vrchat_avatar_styles_get", …)` in
+/// cloud/crates/server/src/commands/vrchat_proxy.rs): no arguments, returns the raw
+/// `VrchatResponse` (`{ status, data }`).
+///
+/// The request itself is built by `VrchatRemoteFacade::avatar_styles`
+/// (crates/application/src/remote/vrchat_facade.rs), so the endpoint path, method and
+/// scope are not duplicated here.
+async fn app__vrchat_avatar_styles_get(
+    state: Arc<RuntimeHostState>,
+    _args: serde_json::Value,
+) -> Result<serde_json::Value, CommandError> {
+    let response = state
+        .vrchat_remote()
+        .avatar_styles()
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
 /// The command surface exposed to the phone UI.
 pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
     let mut registry = CommandRegistry::new();
+    registry.register_typed::<serde_json::Value, serde_json::Value, _, _>(
+        "app__vrchat_avatar_styles_get",
+        app__vrchat_avatar_styles_get,
+    );
     registry.register_typed::<FavoriteListArgs, Vec<vrcx_0_contracts::FavoriteRow>, _, _>(
         "app__favorite_list",
         app__favorite_list,
@@ -198,10 +222,11 @@ mod tests {
             "app__vrchat_auth_auto_login_start",
             "app__web_execute",
             "app__favorite_list",
+            "app__vrchat_avatar_styles_get",
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 11);
+        assert_eq!(registry.len(), 12);
     }
 }
 

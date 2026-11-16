@@ -602,3 +602,68 @@ c. 注册 app__vrchat_avatar_styles_get
 d. curl 打真进程验证
 e. 之后批量搬其它 app__vrchat_* 命令
 ```
+
+---
+
+# 第 12 轮：真机跑通"登录 + 真实数据"，全部经由核心（关键里程碑）
+
+## 证据一：会话从核心恢复
+
+```
+[VrcxCore] restore -> Authed hasUser=true
+[VrcxCore] emitAuthed coreUser=true
+```
+
+`restoreAuth` 调的是 `app__vrchat_auth_auto_login_start`，凭据在核心的库里，
+一次调用就恢复成已认证；`emitAuthed` 用的是核心返回的用户 JSON，没有二次请求。
+
+## 证据二：引擎承载了全部 VRChat 业务请求
+
+```
+proxy GET https://api.vrchat.cloud/api/1/auth/user
+proxy GET https://api.vrchat.cloud/api/1/auth/user/friends?offline=false&offset=0&n=50
+proxy GET https://api.vrchat.cloud/api/1/favorites?type=friend&offset=0&n=50
+proxy GET https://api.vrchat.cloud/api/1/favorite/groups?n=50&offset=0&type=friend
+proxy GET https://api.vrchat.cloud/api/1/notifications?limit=100
+proxy GET https://api.vrchat.cloud/api/1/auth/user/notifications?type=friendRequest&hidden=false
+proxy GET https://api.vrchat.cloud/api/1/profile/usr_ed329568-…?with=…
+```
+
+这些是 VRCM **原来的 Api 方法**发出的请求，全部被 `CoreHttpEngine` 接住并转给核心，
+核心用自己的 cookie jar 发出去。运行期没有再出现 `HttpTimeoutCapability` 之类的异常
+（上一轮声明的 capability 生效了）。
+
+## 证据三：界面显示真实数据
+
+首页截图（`out\android\shot-logged-in.png`）：
+
+- 自己的资料：`97323  33  ask me`（在线好友 33）
+- `处于房间内(7)` —— 好友按房间分组，7 个房间
+- 房间卡片带世界缩略图（`咖啡厅v1.31` 的图片正常显示 → Coil 改独立客户端生效）
+- 房间内成员头像正常（`Kemomimi Yuki`、`宅萝林宝`）
+
+也就是说：**登录、好友列表、房间分组、收藏、通知，全部经由核心拿到，界面正常渲染。**
+
+## 这个里程碑意味着什么，以及它还不是什么
+
+**是**：VRCM 作为 VRCX 前端的可行性已被证实 —— 传输层、登录、数据获取、图片都通了。
+
+**还不是**：数据路径仍然是 `app__web_execute` **透传 VRChat REST**。
+按目标要求，这个必须废弃，改成语义命令。也就是说：
+
+```
+现在：（VRCM Api 方法）→ 引擎 → 核心 → 透传 URL → VRChat
+目标：（VRCM Api 方法）→ 核心语义命令 → 核心自己决定怎么回答（本地库 / 同步数据 / VRChat）
+```
+
+用户对这一步的原话：**「VRCM 原来的那一套对 VRChat API 的各种请求、登录的那一套，都废弃」**。
+
+## 也因此确认了拓扑问题
+
+用户答：「手机自己自足，手机只有一个 VRChat 客户端，也就是 VRCX 核心」。
+
+所以 `vrchat_remote()` 加在**共用 host** 上是正确的：手机进程内的核心就是手机侧
+唯一的 VRChat 客户端，Compose 前端永不直连。已把这条决定同步给正在做接线的子代理。
+
+（本轮 `su` 不可用，`backend.url` 没写进设备，所以 app 走的是进程内核心 ——
+正好就是用户要的形态。）
