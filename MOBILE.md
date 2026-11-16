@@ -1795,3 +1795,43 @@ WS 收到: {"event":"headlessProbe","payload":{"ok":true}}
 - 然后好友列表会自动经由核心加载（`FriendsApi.fetchFriendList` → 引擎 → 核心）
 
 失败时那行会带异常信息：`login failed: VrcxCoreException: ...`
+
+---
+
+## 诊断日志首次产出：restoreAuth 的核心分支确实在真机上执行（2026-11-17）
+
+启动后 logcat（`println` 落到 `System.out`）：
+
+```
+I System.out: [VrcxCore] restore -> Unauthorized hasUser=false
+```
+
+### 这条日志证明了三件事
+
+1. **诊断管道通了** —— `println` 在 Android 上确实进 logcat（tag `System.out`）
+2. **`restoreAuth` 走的是核心** —— 它调用 `app__vrchat_auth_auto_login_start`，
+   返回的 `AutoLoginOutcome` 被映射成 `AuthState.Unauthorized`
+3. **映射逻辑工作正常** —— 没有已保存凭据时正确落到 `Unauthorized`，不是崩溃、不是 `Authed`
+
+在此之前，「登录生命周期走核心」只有**编译级**证据；现在有了运行时证据。
+
+### 同时暴露的：引擎路径仍未验证
+
+logcat 里**没有任何 `[VrcxCore] proxy ...` 行** —— 说明 VRCM 自己的 Ktor client
+在登录前**根本不发请求**（登录页不需要 API 调用）。
+
+所以「所有 HTTP 走核心」这句话目前仍是推断：
+- 引擎已接进 `NetworkModule`（编译通过）
+- 但没有任何一次真实的 VRCM 请求穿过它
+
+要变成观测事实，必须登录 —— 登录会触发 `POST auth/user`，那会打出一行
+`[VrcxCore] proxy POST https://api.vrchat.cloud/api/1/auth/user`。
+
+### 因此登录一次能同时解锁四项验证
+
+```
+1. 登录本身是否成功
+2. 引擎路径是否真的承载请求（看 proxy 行）
+3. cookie 是否正确带上（看登录后 fetchFriendList 是否 200）
+4. 好友列表是否出现（页面截图）
+```
