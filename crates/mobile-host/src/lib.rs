@@ -332,6 +332,28 @@ struct SearchGroupsInput {
     params: vrcx_0_contracts::vrchat_requests::GroupSearchParams,
 }
 
+/// Mirrors cloud's `SearchWorldsInput`.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SearchWorldsInput {
+    #[serde(default)]
+    params: vrcx_0_contracts::vrchat_requests::WorldSearchParams,
+    #[serde(default)]
+    option: Option<String>,
+}
+
+async fn app__vrchat_search_worlds_get(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<SearchWorldsInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let input = args.input;
+    let response = state
+        .vrchat_remote()
+        .search_worlds(input.params, input.option)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
 /// Mirrors cloud's `AvatarListByUserInput`.
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -590,6 +612,10 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         "app__notification_list_query",
         app__notification_list_query,
     );
+    registry.register_typed::<InputArgs<SearchWorldsInput>, serde_json::Value, _, _>(
+        "app__vrchat_search_worlds_get",
+        app__vrchat_search_worlds_get,
+    );
     registry.register_typed::<InputArgs<AvatarListByUserInput>, serde_json::Value, _, _>(
         "app__vrchat_avatar_list_by_user_get",
         app__vrchat_avatar_list_by_user_get,
@@ -727,7 +753,7 @@ mod tests {
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 30);
+        assert_eq!(registry.len(), 31);
     }
 }
 
@@ -867,6 +893,7 @@ async fn app__favorite_list(
     .map_err(|error| CommandError::failed(error.to_string()))?;
     Ok(rows)
 }
+
 
 
 
