@@ -1,7 +1,14 @@
+#[cfg(any(windows, target_os = "linux", target_os = "macos"))]
 use sha2::{Digest, Sha256};
 
+/// Key derivation must never change on a platform that already has data on
+/// disk: the key is `Sha256(CONTEXT || machine_id)`, so altering either input
+/// makes every stored secret (VRChat cookies, saved credentials, remote-sync
+/// password) undecryptable.
+#[cfg(any(windows, target_os = "linux", target_os = "macos"))]
 const SECRETS_KEY_CONTEXT: &[u8] = b"vrcx-0-secrets-v1";
 
+#[cfg(any(windows, target_os = "linux", target_os = "macos"))]
 fn derive_key(machine_id: &str) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update(SECRETS_KEY_CONTEXT);
@@ -9,6 +16,7 @@ fn derive_key(machine_id: &str) -> [u8; 32] {
     hasher.finalize().into()
 }
 
+#[cfg(any(windows, target_os = "linux", target_os = "macos"))]
 pub fn derive_secrets_key() -> Option<[u8; 32]> {
     let machine_id = match machine_uid::get() {
         Ok(machine_id) => machine_id,
@@ -23,6 +31,22 @@ pub fn derive_secrets_key() -> Option<[u8; 32]> {
         return None;
     }
     Some(derive_key(machine_id))
+}
+
+/// Android / iOS: `machine-uid` has no implementation for these targets, so the
+/// desktop derivation above cannot be used.
+///
+/// TODO(mobile): back this with Android Keystore / iOS Keychain — generate a
+/// random 32-byte key on first run and keep it in the platform keystore. Until
+/// then secrets are stored without encryption, which is a real regression and
+/// must not ship.
+#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
+pub fn derive_secrets_key() -> Option<[u8; 32]> {
+    tracing::warn!(
+        "secrets-at-rest encryption is not implemented on this platform yet; \
+         stored credentials will not be encrypted"
+    );
+    None
 }
 
 #[cfg(test)]
