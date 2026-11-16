@@ -82,6 +82,14 @@ async fn app__vrchat_auth_saved_snapshot_get(
     serde_json::to_value(snapshot).map_err(|error| CommandError::failed(error.to_string()))
 }
 
+async fn app__backend_runtime_combined_snapshot_get(
+    state: Arc<RuntimeHostState>,
+    _input: serde_json::Value,
+) -> Result<serde_json::Value, CommandError> {
+    serde_json::to_value(state.backend_runtime_combined_snapshot())
+        .map_err(|error| CommandError::failed(error.to_string()))
+}
+
 /// The command surface exposed to the phone UI.
 pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
     let mut registry = CommandRegistry::new();
@@ -108,6 +116,10 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
     registry.register_typed::<serde_json::Value, serde_json::Value, _, _>(
         "app__vrchat_auth_saved_snapshot_get",
         app__vrchat_auth_saved_snapshot_get,
+    );
+    registry.register_typed::<serde_json::Value, serde_json::Value, _, _>(
+        "app__backend_runtime_combined_snapshot_get",
+        app__backend_runtime_combined_snapshot_get,
     );
     registry
 }
@@ -137,12 +149,14 @@ mod tests {
             "app__vrchat_auth_session_respond",
             "app__vrchat_auth_session_end",
             "app__vrchat_auth_saved_snapshot_get",
+            "app__backend_runtime_combined_snapshot_get",
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 6);
+        assert_eq!(registry.len(), 7);
     }
 }
+
 
 
 
