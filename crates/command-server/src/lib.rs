@@ -13,12 +13,15 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
+use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
-use axum::routing::post;
+use axum::routing::{get, post};
 use axum::{Json, Router};
+use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use tokio::sync::broadcast;
 
 /// How a failed command reports itself. Mirrors the cloud server's codes so the
 /// frontend can branch on `code` instead of parsing messages.
@@ -46,6 +49,13 @@ impl CommandError {
         Self {
             code: CommandErrorCode::Unsupported,
             message: format!("`{command}` is not available on this transport"),
+        }
+    }
+
+    pub fn bad_request(message: impl Into<String>) -> Self {
+        Self {
+            code: CommandErrorCode::BadRequest,
+            message: message.into(),
         }
     }
 
@@ -96,6 +106,34 @@ where
             .insert(name, Arc::new(move |state, args| Box::pin(handler(state, args))));
     }
 
+    /// Registers a command whose implementation takes and returns typed values.
+    ///
+    /// This exists so a command is written **once** as an ordinary async
+    /// function over `(host, input) -> Result<Output, _>`; the JSON seam
+    /// (`from_value` / `to_value`) is generated here instead of being hand
+    /// written per command. That is what keeps the transport from growing a
+    /// second, drifting copy of the command surface the way a per-command
+    /// adapter crate does.
+    pub fn register_typed<In, Out, F, Fut>(&mut self, name: &'static str, handler: F)
+    where
+        In: serde::de::DeserializeOwned + Send + 'static,
+        Out: Serialize + 'static,
+        F: Fn(Arc<S>, In) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = Result<Out, CommandError>> + Send + 'static,
+    {
+        let handler = Arc::new(handler);
+        self.register(name, move |state, args| {
+            let handler = Arc::clone(&handler);
+            async move {
+                let input: In = serde_json::from_value(args)
+                    .map_err(|error| CommandError::bad_request(error.to_string()))?;
+                let output = handler(state, input).await?;
+                serde_json::to_value(output)
+                    .map_err(|error| CommandError::failed(error.to_string()))
+            }
+        });
+    }
+
     pub fn len(&self) -> usize {
         self.handlers.len()
     }
@@ -128,10 +166,63 @@ struct InvokeRequest {
     args: Value,
 }
 
+/// Broadcast channel for the push half of the contract.
+///
+/// The desktop uses Tauri's `listen`; the cloud server uses `GET /api/events`.
+/// This is the same idea: the host publishes `(eventName, payload)` and every
+/// connected UI receives it. Event names are the `EVENT_NAME` constants from
+/// `vrcx-0-runtime-event`, so the two transports stay in sync.
+#[derive(Clone)]
+pub struct EventBus {
+    sender: broadcast::Sender<(String, Value)>,
+}
+
+impl EventBus {
+    pub fn new(capacity: usize) -> Self {
+        let (sender, _) = broadcast::channel(capacity);
+        Self { sender }
+    }
+
+    pub fn publish(&self, event: impl Into<String>, payload: Value) {
+        // A send error only means nobody is listening right now.
+        let _ = self.sender.send((event.into(), payload));
+    }
+
+    pub fn subscribe(&self) -> broadcast::Receiver<(String, Value)> {
+        self.sender.subscribe()
+    }
+}
+
+async fn events_endpoint<S>(ws: WebSocketUpgrade, State(bus): State<Arc<CommandBus<S>>>) -> Response
+where
+    S: Send + Sync + 'static,
+{
+    let events = bus.events.clone();
+    ws.on_upgrade(move |socket| forward_events(socket, events.subscribe()))
+}
+
+async fn forward_events(mut socket: WebSocket, mut receiver: broadcast::Receiver<(String, Value)>) {
+    loop {
+        match receiver.recv().await {
+            Ok((event, payload)) => {
+                let frame = json!({ "event": event, "payload": payload }).to_string();
+                if socket.send(Message::Text(frame.into())).await.is_err() {
+                    return;
+                }
+            }
+            Err(broadcast::error::RecvError::Lagged(skipped)) => {
+                tracing::warn!(skipped, "event subscriber lagged");
+            }
+            Err(broadcast::error::RecvError::Closed) => return,
+        }
+    }
+}
+
 /// Shared router state: the registry plus the host it dispatches against.
 pub struct CommandBus<S> {
     pub registry: Arc<CommandRegistry<S>>,
     pub state: Arc<S>,
+    pub events: EventBus,
 }
 
 async fn invoke_endpoint<S>(
@@ -165,6 +256,7 @@ where
 {
     Router::new()
         .route("/api/invoke", post(invoke_endpoint::<S>))
+        .route("/api/events", get(events_endpoint::<S>))
         .with_state(bus)
 }
 
@@ -208,10 +300,93 @@ mod tests {
         registry.register("app__echo", echo);
         Arc::new(CommandBus {
             registry: Arc::new(registry),
+            events: EventBus::new(64),
             state: Arc::new(FakeHost {
                 greeting: "hello".into(),
             }),
         })
+    }
+
+    #[tokio::test]
+    async fn events_are_broadcast_to_subscribers() {
+        let bus = EventBus::new(8);
+        let mut first = bus.subscribe();
+        let mut second = bus.subscribe();
+
+        bus.publish("authenticatedSessionProjection", json!({ "phase": "ready" }));
+
+        for receiver in [&mut first, &mut second] {
+            let (event, payload) = receiver.recv().await.expect("event");
+            assert_eq!(event, "authenticatedSessionProjection");
+            assert_eq!(payload["phase"], "ready");
+        }
+    }
+
+    #[tokio::test]
+    async fn typed_registration_maps_arguments_and_results() {
+        #[derive(serde::Deserialize)]
+        struct Input {
+            name: String,
+        }
+        #[derive(Serialize)]
+        struct Output {
+            greeting: String,
+        }
+
+        async fn greet(
+            state: Arc<FakeHost>,
+            input: Input,
+        ) -> Result<Output, CommandError> {
+            Ok(Output {
+                greeting: format!("{}, {}", state.greeting, input.name),
+            })
+        }
+
+        let mut registry = CommandRegistry::new();
+        registry.register_typed::<Input, Output, _, _>("app__greet", greet);
+
+        let future = registry
+            .dispatch(
+                Arc::new(FakeHost {
+                    greeting: "hi".into(),
+                }),
+                "app__greet",
+                json!({ "name": "vrcx" }),
+            )
+            .expect("registered");
+        let value = future.await.expect("ok");
+        assert_eq!(value["greeting"], "hi, vrcx");
+    }
+
+    #[tokio::test]
+    async fn typed_registration_rejects_bad_arguments() {
+        #[derive(serde::Deserialize)]
+        struct Input {
+            #[allow(dead_code)]
+            name: String,
+        }
+
+        async fn noop(
+            _state: Arc<FakeHost>,
+            _input: Input,
+        ) -> Result<Value, CommandError> {
+            Ok(Value::Null)
+        }
+
+        let mut registry = CommandRegistry::new();
+        registry.register_typed::<Input, Value, _, _>("app__noop", noop);
+
+        let future = registry
+            .dispatch(
+                Arc::new(FakeHost {
+                    greeting: "hi".into(),
+                }),
+                "app__noop",
+                json!({ "wrong": 1 }),
+            )
+            .expect("registered");
+        let error = future.await.expect_err("must reject");
+        assert!(matches!(error.code, CommandErrorCode::BadRequest));
     }
 
     #[test]
@@ -265,3 +440,4 @@ mod tests {
         response
     }
 }
+
