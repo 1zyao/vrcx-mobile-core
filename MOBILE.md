@@ -162,3 +162,67 @@ git merge FETCH_HEAD        # 或 git rebase
 
 - `D:\vrcx0\mobile-android-audit.md` —— 完整静态审计 + 实测结果
 - `D:\vrcx0\README.md` —— 整个工作区的总览
+
+---
+
+## 出 APK 的方法（本机实测通过）
+
+产物：`D:\vrcx0\out\android\VRCX-0-mobile-debug-arm64.apk`（debug 338 MB）
+
+### 三处必须加的环境/工程调整
+
+1. **`CFLAGS_aarch64_linux_android=-save-temps=obj`**
+   本机 `clang` 在编译 `.S` 汇编时 `unable to make temporary file: Permission denied`
+   （`.c` 正常）。让它把中间文件写到目标对象旁即可绕开。
+
+2. **`DOCS_RS=1`**
+   `tauri-plugin` 的 build script 要在 cargo registry 里给每个插件建
+   `<crate>/android/.tauri/tauri-api`，本机 cargo 子进程没权限建目录（os error 5）。
+   `tauri-plugin/src/build/mobile.rs:114` 有 `DOCS_RS` 逃生门，直接跳过这段。
+   **代价**：插件的 Android 端工程不会被 Gradle 链接进去（fs / notification / deep-link
+   这些插件在手机上可能不工作）。要根治得让这些目录可写，或改用可写的 vendor 目录。
+
+3. **`compileSdk`/`targetSdk` 改成 36**（`src-tauri/gen/android/app/build.gradle.kts`）
+   模板要 37，本机只装了 platform 36。`gen/` 是 gitignore 的，重新 `tauri android init` 后要再改一次。
+
+另外 Gradle 要走代理：`src-tauri/gen/android/gradle.properties` 里加了
+`systemProp.http(s).proxyHost/Port`。
+
+### 工程侧的三处改动（已提交，不是临时 hack）
+
+- `src-tauri/Cargo.toml` 加 `[lib] crate-type = ["staticlib","cdylib","rlib"]`
+  —— 移动端要 `libvrcx_0.so`，没有 cdylib 出不来
+- `src-tauri/src/lib.rs` 用 `#[cfg_attr(mobile, tauri::mobile_entry_point)] pub fn run()`
+  —— 否则 `tauri android build` 报 "does not include required runtime symbols"
+- `src-tauri/tauri.android.conf.json` 把 `beforeBuildCommand` 置空
+  —— Gradle 里起不动 `npm.bat`；前端产物已由 `npm run build` 单独生成到 `dist/`
+
+### 完整命令
+
+```powershell
+cd D:\vrcx0\mobile
+npm install; npm run build            # 出 dist/
+
+$ndk = 'C:\Android\Sdk\ndk\27.3.13750724'
+$env:ANDROID_HOME='C:\Android\Sdk'; $env:ANDROID_SDK_ROOT='C:\Android\Sdk'
+$env:NDK_HOME=$ndk; $env:ANDROID_NDK_HOME=$ndk
+$env:JAVA_HOME='C:\Program Files\Eclipse Adoptium\jdk-17.0.20.101-hotspot'
+$env:PATH = 'D:\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\bin\Hostx64\x64;' + $env:PATH
+$env:CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER = 'link.exe'   # 覆盖 .cargo/config.toml 的 lld-link
+$env:CC_aarch64_linux_android  = "$ndk\toolchains\llvm\prebuilt\windows-x86_64\bin\aarch64-linux-android24-clang.cmd"
+$env:AR_aarch64_linux_android  = "$ndk\toolchains\llvm\prebuilt\windows-x86_64\bin\llvm-ar.exe"
+$env:CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER = $env:CC_aarch64_linux_android
+$env:CFLAGS_aarch64_linux_android = '-save-temps=obj'
+$env:DOCS_RS = '1'
+$env:HTTP_PROXY='http://127.0.0.1:7890'; $env:HTTPS_PROXY='http://127.0.0.1:7890'
+
+npx tauri android build --debug --apk --target aarch64
+```
+
+要 x86_64（模拟器）就把 `aarch64` 换成 `x86_64`，同时把 `CC_`/`AR_`/`LINKER`
+换成 `x86_64-linux-android24-clang`。
+
+### 还没做的
+
+- **release 签名**：现在只有 debug APK。release 要配 `signingConfig` + keystore。
+- **真机/模拟器验证**：还没有设备跑过，所以前面三个运行时修复仍只是编译级验证。

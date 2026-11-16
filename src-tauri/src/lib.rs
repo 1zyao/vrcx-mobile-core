@@ -10,4 +10,12 @@ mod macos_menu;
 mod single_instance_gate;
 mod state;
 
-pub use app::run;
+pub use app::run as run_app;
+
+/// Tauri's mobile runtime looks for the symbols this macro generates; without it
+/// `tauri android build` rejects the produced library with
+/// "does not include required runtime symbols".
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    app::run();
+}
