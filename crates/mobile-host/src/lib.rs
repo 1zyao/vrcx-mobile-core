@@ -332,6 +332,15 @@ struct SearchGroupsInput {
     params: vrcx_0_contracts::vrchat_requests::GroupSearchParams,
 }
 
+async fn app__notification_mark_seen_batch(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<vrcx_0_application::social::NotificationMarkSeenBatchInput>,
+) -> Result<vrcx_0_application::social::NotificationMarkSeenBatchResult, CommandError> {
+    state
+        .mark_notifications_seen_batch(args.input)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))
+}
 /// Mirrors the facade's file analysis input.
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -704,6 +713,12 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         "app__notification_list_query",
         app__notification_list_query,
     );
+    registry.register_typed::<
+        InputArgs<vrcx_0_application::social::NotificationMarkSeenBatchInput>,
+        vrcx_0_application::social::NotificationMarkSeenBatchResult,
+        _,
+        _,
+    >("app__notification_mark_seen_batch", app__notification_mark_seen_batch);
     registry.register_typed::<InputArgs<FileAnalysisArgs>, serde_json::Value, _, _>(
         "app__vrchat_auth_file_analysis_get",
         app__vrchat_auth_file_analysis_get,
@@ -869,7 +884,7 @@ mod tests {
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 36);
+        assert_eq!(registry.len(), 37);
     }
 }
 
@@ -1009,6 +1024,7 @@ async fn app__favorite_list(
     .map_err(|error| CommandError::failed(error.to_string()))?;
     Ok(rows)
 }
+
 
 
 

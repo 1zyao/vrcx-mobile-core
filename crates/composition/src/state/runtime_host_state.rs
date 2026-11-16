@@ -1048,5 +1048,29 @@ impl RuntimeHostState {
             .resolve(&auth_scope.endpoint, &file_id)
             .await
     }
+
+    /// Marks notifications as seen, locally and then remotely.
+    ///
+    /// Cloud's `mark_notifications_seen_batch`: the local rows are committed first, then the remote
+    /// calls run with retries, so a network failure leaves the local state correct. The authenticated
+    /// mutation context is what enforces "signed in" and detects a session swap mid-batch.
+    pub async fn mark_notifications_seen_batch(
+        &self,
+        input: vrcx_0_application::social::NotificationMarkSeenBatchInput,
+    ) -> vrcx_0_application_core::Result<
+        vrcx_0_application::social::NotificationMarkSeenBatchResult,
+    > {
+        let mutation = vrcx_0_application_core::AuthenticatedMutationContext::capture(
+            &self.runtime_context.auth_scope,
+            &self.runtime_context.remote_mutations,
+            "Batch action",
+        )?;
+        let actions = vrcx_0_outbound_adapters::LocalNotificationMarkSeenActions::new(
+            self.runtime_context.db.as_ref(),
+            self.runtime_context.web.as_ref(),
+            mutation,
+        );
+        vrcx_0_application::social::mark_notifications_seen_batch(&actions, input).await
+    }
 }
 
