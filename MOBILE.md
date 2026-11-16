@@ -1393,3 +1393,55 @@ compileGithubDebugKotlinAndroid   BUILD SUCCESSFUL (30s)
 installGithubDebug                EXIT=0
 pid 16631 / core ready / event connected / probeEvent 收到 / 无 FATAL
 ```
+
+---
+
+## 回归检查（2026-11-17）：桌面 target 编译通过，但运行时会坏
+
+### 修掉的编译回归
+
+`AuthService` 里我写过 `android.util.Log`（在 commonMain），导致：
+
+```
+e: AuthService.kt:824 Unresolved reference 'android'
+:composeApp:compileKotlinDesktop  FAILED
+```
+
+已改成不带日志的 `runCatching { ... }`。现在两个 target 都过：
+
+```
+compileKotlinDesktop                 BUILD SUCCESSFUL (28s)
+compileGithubDebugKotlinAndroid      BUILD SUCCESSFUL (28s)
+```
+
+### 但发现一个更严重的：引擎替换是无条件的
+
+```kotlin
+// NetworkModule.kt:79
+HttpClient(CoreHttpEngine()) { ... }
+```
+
+而 `CoreHttpEngine.execute` 在 `isVrcxCoreReady() == false` 时返回 **503**。
+桌面 target 上 `isVrcxCoreReady()` 恒为 `false`（我写的 actual），
+**所以 VRCM 的桌面版本编译通过、但发不出任何 VRChat 请求 —— 等于废了。**
+
+这不影响 `D:\vrcx0\src`（VRCX-0 桌面主线，完全没动），但它是 VRCM 自身的桌面 target 回归。
+
+### 修法（下一轮做）
+
+需要让引擎按平台条件选择：
+
+```kotlin
+// commonMain
+expect fun createApiEngine(): HttpClientEngine?      // null = 用平台默认引擎
+
+// androidMain
+actual fun createApiEngine() = if (isVrcxCoreReady()) CoreHttpEngine() else null
+// desktopMain / iosMain
+actual fun createApiEngine() = null
+```
+
+然后 NetworkModule 里分支构造。代价是配置块要写两份，或者把
+`configureApiClient(...)` 抽成一个可复用的 lambda。
+
+**在那之前，VRCM 的桌面 target 不可用** —— 这点必须记住，不能因为"编译过了"就以为没问题。
