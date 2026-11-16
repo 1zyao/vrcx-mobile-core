@@ -9,6 +9,67 @@ export type MobileFeedTone =
     | 'avatar'
     | 'unknown';
 
+export type FeedLocationAccess =
+    | 'public'
+    | 'friends'
+    | 'friendsPlus'
+    | 'invite'
+    | 'invitePlus'
+    | 'group'
+    | 'private'
+    | 'unknown';
+
+export type ParsedFeedLocation = {
+    access: FeedLocationAccess;
+    instanceId?: string;
+};
+
+/**
+ * Splits a VRChat `location` string (`wrld_xxx:instanceId~flags`) into the
+ * instance access level, the same way VRCM 1.1.3's `parseFeedLocation` does.
+ *
+ * This matters because the read model only carries `world_name` when the world
+ * happens to be cached locally; the access level is always derivable, so it can
+ * stand in for a missing world name instead of printing "unknown world".
+ */
+export function parseFeedLocation(
+    location: string | null | undefined
+): ParsedFeedLocation | null {
+    const raw = location?.trim();
+    if (!raw || raw === 'offline' || raw === 'traveling') {
+        return null;
+    }
+    if (raw === 'private') {
+        return { access: 'private' };
+    }
+
+    const separator = raw.indexOf(':');
+    const instance = separator >= 0 ? raw.slice(separator + 1) : '';
+    const [instanceId = '', ...flags] = instance.split('~');
+    const has = (flag: string) => flags.some((entry) => entry.startsWith(flag));
+    const base = instanceId ? { instanceId } : {};
+
+    if (has('private')) {
+        return { access: 'private', ...base };
+    }
+    if (has('group')) {
+        return { access: 'group', ...base };
+    }
+    if (has('canRequestInvite')) {
+        return {
+            access: has('friends') ? 'friendsPlus' : 'invitePlus',
+            ...base
+        };
+    }
+    if (has('friends') || has('hidden')) {
+        return { access: 'friends', ...base };
+    }
+    if (instance) {
+        return { access: 'public', ...base };
+    }
+    return { access: 'unknown' };
+}
+
 export type MobileFeedPresentation = {
     /**
      * Feed event type. The label is translated by the caller through the same
@@ -22,6 +83,8 @@ export type MobileFeedPresentation = {
     primaryKey?: string;
     /** Row-derived text: names, statuses and bios are shown verbatim. */
     primary?: string;
+    /** Access-level key (`view.activity.access.*`) shown next to the location. */
+    accessKey?: string;
     /** Optional supporting line. */
     secondary?: string;
     tone: MobileFeedTone;
@@ -79,6 +142,11 @@ export function describeMobileFeedRow(
         firstNonEmpty(row.worldName, row.location)
     );
     const typeKey = firstNonEmpty(row.type) || 'GPS';
+    const parsed = parseFeedLocation(row.location);
+    const accessKey =
+        parsed && parsed.access !== 'private' && parsed.access !== 'unknown'
+            ? `view.activity.access.${parsed.access}`
+            : undefined;
 
     switch (row.type) {
         case 'Online':
@@ -92,14 +160,14 @@ export function describeMobileFeedRow(
             return {
                 typeKey,
                 primary: location,
-                primaryKey: location ? undefined : UNKNOWN_WORLD_KEY,
+                accessKey: location ? undefined : accessKey,
                 tone: 'offline'
             };
         case 'GPS':
             return {
                 typeKey,
                 primary: location,
-                primaryKey: location ? undefined : UNKNOWN_WORLD_KEY,
+                accessKey: location ? undefined : accessKey,
                 secondary: readableGroupName(row.groupName) || undefined,
                 tone: 'move'
             };

@@ -71,26 +71,49 @@ function groupByDay(rows: FeedRowOutput[]): DayGroup[] {
     return groups;
 }
 
+/** Stable per-user hue so the same person keeps the same fallback colour. */
+function avatarHue(seed: string) {
+    let hash = 0;
+    for (let index = 0; index < seed.length; index += 1) {
+        hash = (hash * 31 + seed.charCodeAt(index)) | 0;
+    }
+    return Math.abs(hash) % 360;
+}
+
 function FeedAvatar({ row }: { row: FeedRowOutput }) {
     const url =
         row.currentAvatarThumbnailImageUrl?.trim() ||
         row.currentAvatarImageUrl?.trim() ||
         '';
-    const [failed, setFailed] = useState(false);
+    const [status, setStatus] = useState<'loading' | 'ok' | 'failed'>(
+        url ? 'loading' : 'failed'
+    );
+    const hue = avatarHue(row.userId ?? row.displayName ?? '?');
+    const initial = (row.displayName?.trim() || '?').slice(0, 1).toUpperCase();
 
     return (
         <div className="shrink-0">
-            {url && !failed ? (
+            {url && status !== 'failed' ? (
                 <img
                     src={url}
                     alt=""
                     loading="lazy"
-                    onError={() => setFailed(true)}
-                    className="bg-muted size-11 rounded-full object-cover"
+                    onLoad={() => setStatus('ok')}
+                    onError={() => setStatus('failed')}
+                    className={cn(
+                        'bg-muted size-11 rounded-full object-cover',
+                        status === 'loading' && 'animate-pulse'
+                    )}
                 />
             ) : (
-                <div className="bg-muted text-muted-foreground flex size-11 items-center justify-center rounded-full text-[15px] font-medium">
-                    {(row.displayName?.trim() || '?').slice(0, 1).toUpperCase()}
+                <div
+                    style={{
+                        backgroundColor: `hsl(${hue} 55% 88%)`,
+                        color: `hsl(${hue} 45% 30%)`
+                    }}
+                    className="flex size-11 items-center justify-center rounded-full text-[15px] font-semibold"
+                >
+                    {initial}
                 </div>
             )}
         </div>
@@ -128,6 +151,11 @@ function FeedRow({ row }: { row: FeedRowOutput }) {
     const primary = presentation.primaryKey
         ? t(presentation.primaryKey)
         : presentation.primary;
+    // Falls back to the instance access level when the world is not cached,
+    // so a row never shows a raw id or "unknown world".
+    const accessLabel = presentation.accessKey
+        ? t(presentation.accessKey)
+        : '';
 
     return (
         <div className="flex items-start gap-3 px-4 py-3">
@@ -153,6 +181,11 @@ function FeedRow({ row }: { row: FeedRowOutput }) {
                     {primary ? (
                         <span className="truncate text-sm leading-5">
                             {primary}
+                        </span>
+                    ) : null}
+                    {accessLabel ? (
+                        <span className="text-muted-foreground shrink-0 text-xs">
+                            {accessLabel}
                         </span>
                     ) : null}
                 </div>
