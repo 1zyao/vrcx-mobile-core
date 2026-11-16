@@ -17,7 +17,7 @@ use std::path::Path;
 use serde::Serialize;
 use vrcx_0_command_server::serve_loopback;
 use vrcx_0_local_server::generate_token;
-use vrcx_0_mobile_host::{build_bus, MobileRuntimeHostState};
+use vrcx_0_mobile_host::build_bus;
 
 /// What the UI needs to reach the core.
 #[derive(Debug, Clone, Serialize)]
@@ -36,8 +36,10 @@ pub struct CoreEndpoint {
 /// (`/data/user/0/<package>/files` on Android), so the SQLite database lands in
 /// the same place the desktop build would put it.
 pub fn start_core(files_dir: &Path) -> Result<CoreEndpoint, String> {
-    let host = MobileRuntimeHostState::open(files_dir).map_err(|error| error.message)?;
-    let token = generate_token().map_err(|error| format!("generate token: {error}"));
+    // The whole VRCX-0 runtime, assembled the same way the desktop and headless
+    // hosts assemble it. Phone-specific extras are no-ops (see `host`).
+    let host = host::build_host(files_dir)?;
+    let token = generate_token().map_err(|error| format!("generate token: {error}"))?;
 
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -49,8 +51,7 @@ pub fn start_core(files_dir: &Path) -> Result<CoreEndpoint, String> {
         let (address, handle) = serve_loopback(bus)
             .await
             .map_err(|error| format!("bind loopback: {error}"))?;
-        // The server runs for the lifetime of the process; keep the task alive
-        // by leaking it into the runtime rather than dropping the handle.
+        // The server lives for the whole process; drop the handle, keep the task.
         std::mem::forget(handle);
         Ok::<u16, String>(address.port())
     })?;
@@ -58,7 +59,7 @@ pub fn start_core(files_dir: &Path) -> Result<CoreEndpoint, String> {
     // Keep the runtime alive for as long as the core is in use.
     std::mem::forget(runtime);
 
-    Ok(CoreEndpoint { port, token: token? })
+    Ok(CoreEndpoint { port, token })
 }
 
 /// JNI entry point for the Android app.
@@ -143,4 +144,5 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 }
+
 
