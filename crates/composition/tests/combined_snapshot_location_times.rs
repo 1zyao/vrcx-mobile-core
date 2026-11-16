@@ -46,6 +46,7 @@ async fn a_window_opened_later_still_gets_how_long_friends_have_been_in_their_in
             source: AppDataDirSource::Cli,
         },
         app_version: "0.0.0-test".into(),
+        device_hostname: String::new(),
         profile: RuntimeHostProfile::HeadlessData,
         database_maintenance_cache_dir: None,
         task_executor: None,
