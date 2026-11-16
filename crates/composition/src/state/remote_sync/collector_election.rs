@@ -141,6 +141,20 @@ pub async fn evaluate(host: &Arc<RemoteSyncHost>) -> (bool, Vec<String>) {
 
     let blocking = blockers(&device_id, &role, &status.remote_devices);
     let may = may_collect(&device_id, &role, &status.remote_devices);
+    // Record the decision in `_sync_meta` (per-device, never synced) so it can
+    // be inspected without a UI: `select value from _sync_meta where key like
+    // 'sync.collector%'`.
+    let _ = vrcx_0_persistence::sync::sync_meta_set(host.db(), "sync.collectorRole", &role);
+    let _ = vrcx_0_persistence::sync::sync_meta_set(
+        host.db(),
+        "sync.collectorMayCollect",
+        if may { "1" } else { "0" },
+    );
+    let _ = vrcx_0_persistence::sync::sync_meta_set(
+        host.db(),
+        "sync.collectorBlockers",
+        &blocking.join(","),
+    );
     // Flip the write gate only; the websocket stays up so the UI remains live
     // and the rows arrive through sync instead.
     if set_live_feed_collector(may) {
