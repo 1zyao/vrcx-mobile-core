@@ -137,6 +137,10 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         "app__vrchat_auth_auto_login_start",
         app__vrchat_auth_auto_login_start,
     );
+    registry.register_typed::<WebExecuteInput, serde_json::Value, _, _>(
+        "app__web_execute",
+        app__web_execute,
+    );
     registry
 }
 
@@ -167,14 +171,53 @@ mod tests {
             "app__vrchat_auth_saved_snapshot_get",
             "app__backend_runtime_combined_snapshot_get",
             "app__vrchat_auth_auto_login_start",
+            "app__web_execute",
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 8);
+        assert_eq!(registry.len(), 9);
     }
 }
 
 
+
+
+
+
+/// Generic VRChat HTTP proxy.
+///
+/// The desktop exposes ~41 per-endpoint proxy commands for this; on the phone a
+/// single command covering any VRChat URL is both smaller and more future-proof -
+/// VRCM already knows the paths it needs (94 endpoints), and none of them require
+/// Rust-side knowledge of the response shape.
+///
+/// Returns the desktop's `HttpApiExecuteResponse` shape: `{ status, data }`, with
+/// `data` being the raw response body string.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WebExecuteInput {
+    url: String,
+    method: String,
+    #[serde(default)]
+    headers: Vec<(String, String)>,
+    #[serde(default)]
+    body: Option<String>,
+}
+
+async fn app__web_execute(
+    state: Arc<RuntimeHostState>,
+    input: WebExecuteInput,
+) -> Result<serde_json::Value, CommandError> {
+    let mut request = vrcx_0_contracts::WebExecuteRequest::new(input.url, input.method);
+    request.headers = input.headers;
+    request.body = input.body;
+    let (status, data) = state
+        .web_client()
+        .execute(request)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    Ok(serde_json::json!({ "status": status, "data": data }))
+}
 
 
 
