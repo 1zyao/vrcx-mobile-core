@@ -491,3 +491,56 @@ cloud 的 `local_data()` 门面 | 不在 `cloud/crates/server/src` 里（在上�
 
 只是在决定方向后核实了「哪些域现在能用」。结论是只有 feed，
 所以必须先做门面移植 —— 这是绕不过去的一步，也是我之前没做的部分。
+
+---
+
+# 第 10 轮：avatars 域的映射审计（覆盖面 10/11）
+
+## 方法
+
+从 cloud 全部命令注册里抽出**去重命令名**：**361 条**（与早前 bindings 的数字一致；
+文档里的 617 是桌面 `collect_commands!` 的条目数，含重复与包装）。
+
+然后逐条比对 VRCM `AvatarsApi` 的 11 个方法：
+
+| VRCM | VRCX 规范命令 | 备注 |
+|---|---|---|
+`getAvatarStyles` | `app__vrchat_avatar_styles_get` | 读 |
+`getAvatars` | `app__vrchat_avatar_list_by_user_get` | 读 |
+`getAvatarById` | `app__my_avatar_by_id_get` | 读 |
+`getFavoritedAvatars` | `app__favorite_list {kind:"avatar"}` | ✅ 已在本 fork 验证过 |
+`selectAvatar` | `app__vrchat_avatar_select` | 写 |
+`selectFallbackAvatar` | `app__vrchat_avatar_select_fallback` | 写 |
+`updateAvatar` | `app__vrchat_avatar_save` | 写 |
+`deleteAvatar` | `app__vrchat_avatar_delete` | 写 |
+`enqueueImpostor` | `app__vrchat_avatar_impostor_create` | 写 |
+`deleteImpostor` | `app__vrchat_avatar_impostor_delete` | 写 |
+`getImpostorQueueStats` | **无对应** | VRCX 不提供 |
+
+## 这改变了工作量判断
+
+之前我以为"每个域都要先移植服务端门面"。对 **写操作** 类的方法不成立：
+
+VRCM 的 Api 大多是 VRChat REST 的薄包装，而 VRCX 有对应的 `app__vrchat_*` 命令
+（`vrchat_mutations.rs`，41 条）。这些命令本身也是对 VRChat 的调用，只是被 VRCX
+规范化、并挂在它的运行时上。
+
+所以移植目标分两类：
+
+```
+本地读模型   app__feed_rows_query / app__favorite_list / app__avatar_get …
+             → 纯 db 读，已在 fork 可用（feed、favorites 已验证）
+
+VRChat 动作  app__vrchat_avatar_select / _delete / _styles_get …
+             → 需要把 vrchat_mutations 里对应的那条搬进 fork（形状照抄）
+```
+
+## 下一轮
+
+挑**最小的一条**先搬：`app__vrchat_avatar_styles_get`（只读、无参数依赖），
+搬进 fork 后用 curl 打真进程验证返回 JSON，再继续下一条。
+
+## 顺带确认
+
+`app__favorite_list {kind:"avatar"}` 就是 `getFavoritedAvatars` 的实现方式 —— 
+所以 favorites 那条命令不只服务收藏页，也服务头像页。一个命令覆盖两处需求。
