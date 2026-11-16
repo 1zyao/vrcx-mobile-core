@@ -1253,3 +1253,56 @@ HttpClient(CoreEngine()) { configureApiClient(...) }     // NetworkModule.kt:79
 **这件事需要先查 Ktor 3.x 的 `HttpClientEngine` 接口签名**（`execute` 的参数、
 `HttpResponseData` 的构造参数、`callContext` 的变化）。我这次没有凭记忆写，
 因为接口对不上会白费几轮。
+
+---
+
+## Ktor 引擎换成 CoreHttpEngine（2026-11-17）
+
+```kotlin
+// NetworkModule.kt:79
+HttpClient(CoreHttpEngine()) { configureApiClient(...) }
+```
+
+**一行改动，`network/` 下所有 Api 类自动经由核心**。不再需要逐个方法 gate。
+
+### 引擎实现（子代理完成，`mobilecore/CoreHttpEngine.kt`）
+
+签名来自三处核对（context7 文档 → 本机 ktor 3.1.1 jar 的 `javap` → GitHub 3.1.1 源码），
+不是凭记忆：
+
+```
+HttpResponseData(statusCode, requestTime, headers, version, body: Any, callContext)   // 6 个位置参数
+execute 带 @io.ktor.utils.io.InternalAPI（ERROR 级 opt-in）
+```
+
+子代理在离线冒烟里自己踩出两个真 bug 并修好：
+
+1. `JsonArrayBuilder` 没有 `add(String)` 重载
+2. `callContext` 必须用 Ktor 的 `io.ktor.client.engine.callContext()` —— 用
+   `currentCoroutineContext()` 会在 `HttpStatement.cleanup` 抛
+   `ClassCastException: DeferredCoroutine cannot be cast to CompletableJob`
+3. 请求头必须走 `mergeHeaders(...)`，否则 POST 的 `Content-Type` 不会进 headers
+
+### 平台 actual
+
+补了 `desktopMain` / `iosMain` 的 `vrcxCoreClient()` / `isVrcxCoreReady()`：
+桌面和 iOS 上核心不存在，调用即 `error(...)`，但保证 commonMain 能编译。
+
+### 真机验证
+
+```
+I VrcxCore: core ready on port 43539
+I VrcxCore: event probeEvent: {"ok":true}
+I VrcxCore: probe vrchatGet(config) ok: {...}
+无 FATAL，登录页正常渲染
+```
+
+### 已知限制（子代理列出，我确认需要处理）
+
+| 限制 | 影响 | 处理 |
+|---|---|---|
+**无 `WebSocketCapability`** | VRCM 自己的 `WebSocketApi`（连 VRChat pipeline）会以 "Engine doesn't support WebSocketCapability" 失败 | 这本来就是要去掉的东西（实时改由核心的 `/api/events` 提供），但需要显式移除/改造，否则登录后会报错 |
+无 `Set-Cookie` | `HttpCookies` 收不到任何 cookie | 前提成立（核心持 cookie），无需处理 |
+`HttpTimeout` 不生效 | 核心卡住时请求会一直挂着 | 应把 invoke 包进 `withTimeout` |
+响应无 content-type | 默认按 `application/json` | 需要核心回传响应头才能根治 |
+二进制 body 会退化 | 文件上传不可用 | 后续按需处理 |
