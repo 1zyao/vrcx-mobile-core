@@ -4,13 +4,10 @@ rustflags = ["-C", "target-cpu=x86-64-v2"]
 [target.'cfg(all(windows, target_env = "msvc"))']
 linker = "lld-link.exe"
 
-# Mobile builds need build scripts to write into their own crate directory
-# (tauri plugins provision `android/.tauri/tauri-api` there). On this machine
-# cargo's children cannot create directories inside the shared cargo registry,
-# so the dependencies are vendored into the workspace instead, where writes work.
-# Regenerate with: cargo vendor --versioned-dirs vendor
-[source.crates-io]
-replace-with = "vendored-sources"
-
-[source.vendored-sources]
-directory = "vendor"
+# Dependencies are resolved from the shared cargo registry again.
+#
+# A `vendor/` directory used to be configured here to work around the workspace
+# carrying a Low integrity label: build scripts could not write into the
+# registry, so tauri plugins failed to provision their Android modules. After
+# `icacls /setintegritylevel (OI)(CI)M` on D:\vrcx0 that limitation is gone and
+# vendoring is unnecessary.

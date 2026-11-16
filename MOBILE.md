@@ -388,3 +388,19 @@ logcat FATAL / AndroidRuntime / ClassNotFound           → 无
 + 独立圆形搜索钮（VRCM 1.1.4 的导航形态），页面路由到 stub。
 
 `vendor/`（1.19 GB）尚未验证能否删除 —— 留待下一步。
+
+### vendor/ 已移除（2026-11-16）
+
+`vendor/`（1,189 MB）是为绕开"build script 写不进 registry"而建的，标签修复后不再需要。
+
+验证：
+
+```
+.cargo/config.toml 停用 vendored-sources
+  cargo test -p vrcx-0-command-server -p vrcx-0-mobile-host   → 全过
+  cargo build --target x86_64-linux-android -p vrcx-0 --lib   → 成功
+      tauri-plugin .tauri 错误数 = 0
+删除 vendor/ 后重跑测试                                        → 全过
+```
+
+三个临时方案现已全部退役：`-save-temps=obj`、`DOCS_RS=1`、`vendor/`。
