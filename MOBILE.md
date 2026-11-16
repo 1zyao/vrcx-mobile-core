@@ -1043,3 +1043,40 @@ cargo test -p vrcx-0-mobile-core   → 4 passed
 
 **尚未验证**：真机上 WS 是否真的收到事件。需要登录后才有事件产生
 （presence/notification 都依赖已认证会话）。
+
+---
+
+## 事件通道：Kotlin 侧已写，但握手失败（2026-11-17）
+
+新增：
+```
+commonMain/mobilecore/CoreEvents.kt    CoreEvents(baseUrl).stream(): Flow<CoreEvent>
+androidMain/MainActivity.kt            启动时 collect 并打日志
+```
+
+真机结果：
+
+```
+I VrcxCore: core ready on port 42025
+I VrcxCore: feedRows ok: []
+E VrcxCore: event stream failed
+E   NoTransformationFoundException: Expected DefaultClientWebSocketSession
+E   Response status `400 Bad Request`
+E   Response header `ContentType: text/plain`
+```
+
+**核心返回 400**，说明 axum 的 `WebSocketUpgrade` 提取器没看到升级头
+（`Connection: Upgrade` / `Upgrade: websocket` / `Sec-WebSocket-Key`）。
+也就是说 Ktor 那边没有真正发起 WS 升级 —— 尽管 `HttpClient { install(WebSockets) }`。
+
+### 下一步（明确）
+
+不要在 `CoreEvents` 里自建 `HttpClient`，**复用 VRCM 现有的 WS 客户端配置**
+（`network/websocket/WebSocketApi.kt` 那条路能连 VRChat 的 pipeline，
+说明引擎和插件配置是对的）。做法：照它的 client 构造方式建一个，
+或者直接借它已经配好的 `HttpClient` 实例。
+
+### 顺带确认的事
+
+- 命令通道（HTTP）在同一个进程里工作正常，所以不是网络策略问题
+- 400 是应用层拒绝，不是 Android 明文流量拦截
