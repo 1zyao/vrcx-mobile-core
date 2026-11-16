@@ -579,3 +579,58 @@ fun startVrcxCore(filesDir: String): VrcxCoreClient?
 `restoreAuth()` | `app__vrchat_auth_saved_snapshot_get` | ⬜ 未注册 |
 
 所以下一步：把这 3 条注册进 mobile-host，再改 AuthService 的内部。
+
+---
+
+## AuthService 改造方案（读完 login 实现后，2026-11-17）
+
+```kotlin
+suspend fun login(username, password): AuthState = authMutex.withLock { loginLocked(...) }
+
+private suspend fun loginLocked(...): AuthState {
+    val activeUserId = SharedFlowCentre.currentSession.value?.account?.userId
+    val targetUserId = accountDao.accountDtoByUserName(username)?.userId    // ← AccountDao
+    if (restoreStoredCookies) applyAuthCookie(username)                     // ← cookie 存储
+    return try {
+        authApi.login(username, password).also {                            // ← HTTP 调用
+            if (it is AuthState.Authed) emitAuthed(password, ...)           // ← 大量本地簿记
+            else if (invalidateOnIncompleteAuth) invalidateCurrentSessionLocked()
+        }
+    } catch (e) { if (isAccountSwitch) invalidateCurrentSessionLocked(); throw e }
+}
+```
+
+`emitAuthed` 是私有大函数（存密码、存 cookie、写 AccountDao、发 `SharedFlowCentre` 会话事件）。
+整个 `AuthService` 802 行，`login` 这条链依赖 `AccountDao` / `applyAuthCookie` / `SharedFlowCentre`。
+
+### 为什么不能一次换掉
+
+换 `authApi.login` 只是第一步，`emitAuthed` 之后的簿记是**其它 20+ 个依赖方赖以工作的前提**
+（当前用户、账号列表、会话事件都从这里出）。一次性删掉，全 app 立刻没有登录态。
+
+### 最小安全增量（推荐做法）
+
+**只换 HTTP 那一处，保留簿记：**
+
+```kotlin
+val coreState = if (isVrcxCoreReady())
+    coreLogin(username, password)          // app__vrchat_auth_session_start → AuthState
+else
+    authApi.login(username, password)      // 旧路径，编译期保留，便于对照
+
+coreState.also {
+    if (it is AuthState.Authed) emitAuthed(password, ...)   // 簿记照旧
+    else if (invalidateOnIncompleteAuth) invalidateCurrentSessionLocked()
+}
+```
+
+好处：
+- 登录真的走核心（VRChat 请求由 Rust 发出），**VRCM 不再自己连 VRChat**
+- 簿记不动，20+ 依赖方无感
+- 有 `isVrcxCoreReady()` 兜底，核心没起来就退回旧路径，不会把 app 锁死
+- 后面再逐步把 `emitAuthed` 里的 cookie/密码存储换成读核心的 snapshot
+
+### 需要新写的映射
+
+`session_start` 返回 `LoginSessionState`（Rust 枚举）→ VRCM 的 `AuthState`（`Authed` / 需要 2FA / 失败）。
+这个映射写在新文件 `mobilecore/AuthStateMapping.kt` 里，**不改 VRCM 现有的 AuthState 定义**。
