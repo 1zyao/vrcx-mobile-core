@@ -3316,7 +3316,8 @@
                     "last_pushed": "上次上傳",
                     "last_pulled": "上次下載",
                     "ops_count": "{count} 條",
-                    "this_device_tag": "本機"
+                    "this_device_tag": "本機",
+                    "writing_tag": "正在寫入"
                 },
                 "phase": {
                     "idle": "閒置",

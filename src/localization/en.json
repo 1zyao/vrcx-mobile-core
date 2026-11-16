@@ -3327,7 +3327,8 @@
                     "last_pushed": "Last upload",
                     "last_pulled": "Last download",
                     "ops_count": "{count} ops",
-                    "this_device_tag": "This device"
+                    "this_device_tag": "This device",
+                    "writing_tag": "Writing now"
                 },
                 "phase": {
                     "idle": "Idle",

@@ -302,6 +302,24 @@ export function SettingsSyncTab() {
         ? status.remoteDevices.filter((device) => device.online)
         : [];
 
+    // Who is allowed to record live feed right now: every online `forced`
+    // device, or else the online `auto` device with the smallest id. Mirrors
+    // `collector_election::blockers` on the Rust side, so the badge matches what
+    // the engine actually decided.
+    const writerDeviceIds = new Set<string>(
+        (() => {
+            if (onlineDevices.length === 0) return [];
+            const forced = onlineDevices
+                .filter((device) => device.role === 'forced')
+                .map((device) => device.deviceId);
+            if (forced.length > 0) return forced;
+            const sorted = [...onlineDevices].sort((a, b) =>
+                a.deviceId.localeCompare(b.deviceId)
+            );
+            return sorted[0] ? [sorted[0].deviceId] : [];
+        })()
+    );
+
     return (
         <SettingsTabContent value="sync">
             {!enabled ? (
@@ -751,10 +769,24 @@ export function SettingsSyncTab() {
                                                             )}
                                                         </Badge>
                                                     ) : null}
+                                                    {writerDeviceIds.has(
+                                                        device.deviceId
+                                                    ) ? (
+                                                        <Badge className="h-4 px-1.5 text-[10px]">
+                                                            {t(
+                                                                'view.settings.sync.status.writing_tag'
+                                                            )}
+                                                        </Badge>
+                                                    ) : null}
                                                 </span>
                                                 <span className="text-muted-foreground shrink-0 font-mono">
                                                     {device.ipAddr || '—'}
                                                 </span>
+                                                {device.role ? (
+                                                    <span className="text-muted-foreground shrink-0 font-mono text-[10px] uppercase">
+                                                        {device.role}
+                                                    </span>
+                                                ) : null}
                                                 <span className="ml-auto flex shrink-0 items-center gap-3">
                                                     <span className="text-muted-foreground">
                                                         {device.appVersion ||
