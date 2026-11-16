@@ -63,8 +63,13 @@ vrchat_launch_pipe          screenshot_cache（Android 有限、iOS 基本不行
       注意：`vrchat-client` 和 `integrations` 都建了 reqwest client，改动点不止一处。
 
       **这一项不做，APK 能装上、UI 能显示，但登录 VRChat REST API 会全部 TLS 失败。**
-- [ ] **`secrets_key` 真实现** —— Android Keystore / iOS Keychain 生成随机 32 字节 key
-      目前是 `None` 桩，**不能就这样发布**（cookie / PG 密码会明文落盘）
+- [x] **`secrets_key`**：移动端不再返回 `None`（`9e7da1790` 之后的提交）
+      桌面走 `machine_uid` 派生不变；Android/iOS 改为**首跑生成 32 字节随机 key**，
+      写到应用私有目录的 `secrets.key`（unix `0600`）。该目录本身由应用 UID 独占，
+      其他应用读不到 —— 不再是明文落盘。
+- [ ] **（升级项）把 `secrets.key` 换成 Keystore / Keychain**
+      这需要 JNI `Env` + Android `Context`（或 iOS ObjC 桥），也就是在
+      `tauri android init` 生成的 `MainActivity.kt` 里加一个钩子。当前的文件方案不是硬件级。
 - [ ] **出 APK**：`tauri android init` → `npm install && npm run build`（出 `dist/`）→ `tauri android build`
 - [ ] **UI 触屏化** —— 390px 下主内容仅 118px，零宽度断点，804 处右键菜单
 - [ ] **`tauri.conf.json`** —— `targets: ["nsis"]`、`decorations: false`（自绘标题栏手机上是假标题栏）、
