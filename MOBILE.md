@@ -634,3 +634,54 @@ coreState.also {
 
 `session_start` 返回 `LoginSessionState`（Rust 枚举）→ VRCM 的 `AuthState`（`Authed` / 需要 2FA / 失败）。
 这个映射写在新文件 `mobilecore/AuthStateMapping.kt` 里，**不改 VRCM 现有的 AuthState 定义**。
+
+---
+
+## 登录改走核心（2026-11-17，已编译 + 装机）
+
+`AuthService.loginLocked` 的那一处 HTTP 换成按核心可用性分流：
+
+```kotlin
+val state = if (isVrcxCoreReady()) {
+    vrcxCoreClient().loginBasic(username, password)   // app__vrchat_auth_session_start
+} else {
+    authApi.login(username, password)                 // 旧路径保留
+}
+```
+
+`emitAuthed` 等簿记原样保留，20+ 依赖方无感。
+
+新增文件：
+```
+commonMain/mobilecore/AuthStateMapping.kt   LoginSessionState → VRCM AuthState
+commonMain/mobilecore/VrcxCoreClient.kt      + loginBasic / loginRespond
+```
+
+映射规则：
+```
+Authenticated            → AuthState.Authed
+Challenge(mode=emailOtp) → AuthState.NeedEmailCode
+Challenge(mode=totp)     → AuthState.NeedTFA
+Challenge(mode=otp)      → AuthState.NeedTTFA
+DeviceApproval           → AuthState.Unauthorized("device approval required")
+Failed(reason)           → AuthState.Unauthorized(reason)
+```
+
+设备核准那条暂时降级成消息（手机还没有相应的界面）。枚举 tag 做了防御式解析
+（先按 `Authenticated` 变体名找，再退回 `kind`/`type` 字段），线格式变了也不会崩。
+
+装机验证：
+
+```
+I VrcxCore: core ready on port 42529
+I VrcxCore: feedRows ok: []
+进程 13240 存活，无 FATAL
+```
+
+### 还没验证的
+
+**真实账号登录** —— 需要在界面上输入账号密码，这一步没法用 adb 自动化（Compose 输入框）。
+下次需要人工点一次登录，确认：
+- logcat 里能看到核心调用
+- 登录成功后 `emitAuthed` 正常发会话
+- VRChat 请求确实由 Rust 发出（VRCM 侧没有 `authApi` 的网络日志）
