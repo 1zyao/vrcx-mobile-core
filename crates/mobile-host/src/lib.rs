@@ -275,6 +275,95 @@ struct SearchGroupsInput {
     params: vrcx_0_contracts::vrchat_requests::GroupSearchParams,
 }
 
+/// Mirrors cloud's `UserGetInput` (only the id matters for the raw read).
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UserGetInput {
+    #[serde(default)]
+    user_id: String,
+}
+
+/// Mirrors cloud's `UserProfileInput`.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UserProfileInput {
+    #[serde(default)]
+    user_id: String,
+    #[serde(default)]
+    as_self: bool,
+}
+
+/// Mirrors cloud's `VrchatGroupProfileInput`.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GroupProfileInput {
+    #[serde(default)]
+    group_id: String,
+    #[serde(default)]
+    include_roles: bool,
+}
+
+/// Mirrors cloud's `VrchatInstanceIdentityInput`.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct InstanceIdentityInput {
+    #[serde(default)]
+    world_id: String,
+    #[serde(default)]
+    instance_id: String,
+}
+
+async fn app__vrchat_user_get(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<UserGetInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let response = state
+        .vrchat_remote()
+        .user_get(args.input.user_id)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+async fn app__vrchat_user_profile_get(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<UserProfileInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let input = args.input;
+    let response = state
+        .vrchat_remote()
+        .user_profile(input.user_id, input.as_self)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+async fn app__vrchat_group_get(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<GroupProfileInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let input = args.input;
+    let response = state
+        .vrchat_remote()
+        .group_get(input.group_id, input.include_roles)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+async fn app__vrchat_instance_get(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<InstanceIdentityInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let input = args.input;
+    let response = state
+        .vrchat_remote()
+        .instance_get(input.world_id, input.instance_id)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
 async fn app__vrchat_auth_current_user_get(
     state: Arc<RuntimeHostState>,
     _args: serde_json::Value,
@@ -384,6 +473,22 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
     registry.register_typed::<InputArgs<FavoriteGroupsInput>, serde_json::Value, _, _>(
         "app__vrchat_favorite_groups_get",
         app__vrchat_favorite_groups_get,
+    );
+    registry.register_typed::<InputArgs<UserGetInput>, serde_json::Value, _, _>(
+        "app__vrchat_user_get",
+        app__vrchat_user_get,
+    );
+    registry.register_typed::<InputArgs<UserProfileInput>, serde_json::Value, _, _>(
+        "app__vrchat_user_profile_get",
+        app__vrchat_user_profile_get,
+    );
+    registry.register_typed::<InputArgs<GroupProfileInput>, serde_json::Value, _, _>(
+        "app__vrchat_group_get",
+        app__vrchat_group_get,
+    );
+    registry.register_typed::<InputArgs<InstanceIdentityInput>, serde_json::Value, _, _>(
+        "app__vrchat_instance_get",
+        app__vrchat_instance_get,
     );
     registry.register_typed::<InputArgs<FavoriteAddInput>, serde_json::Value, _, _>(
         "app__vrchat_favorite_add",
@@ -506,7 +611,7 @@ mod tests {
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 22);
+        assert_eq!(registry.len(), 26);
     }
 }
 
@@ -646,6 +751,7 @@ async fn app__favorite_list(
     .map_err(|error| CommandError::failed(error.to_string()))?;
     Ok(rows)
 }
+
 
 
 

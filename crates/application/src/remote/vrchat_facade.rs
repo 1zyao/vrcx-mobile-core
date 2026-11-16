@@ -162,8 +162,38 @@ impl VrchatRemoteFacade {
         Ok(response)
     }
 
-    pub async fn licensed_avatars(&self, n: i32, offset: i32) -> Result<VrchatResponse> {
+    /// A single user by id (`GET users/{id}`), the raw read behind `app__vrchat_user_get`.
+    pub async fn user_get(&self, user_id: String) -> Result<VrchatResponse> {
+        let (user_id, request) = vrcx_0_vrchat_protocol::users::user_get_input(
+            VRCHAT_API_DEFAULT_ENDPOINT.into(),
+            user_id,
+        )?;
         self.execute(
+            "app__vrchat_user_get",
+            format!("Getting user {user_id}."),
+            request,
+            VrchatScope::Vrchat,
+        )
+        .await
+    }
+
+    /// A group by id (`GET groups/{id}`), the raw read behind `app__vrchat_group_get`.
+    pub async fn group_get(&self, group_id: String, include_roles: bool) -> Result<VrchatResponse> {
+        let (group_id, request) = vrcx_0_vrchat_protocol::groups::profile_get_input(
+            VRCHAT_API_DEFAULT_ENDPOINT.into(),
+            group_id,
+            include_roles,
+        )?;
+        self.execute(
+            "app__vrchat_group_get",
+            format!("Getting group {group_id}."),
+            request,
+            VrchatScope::Vrchat,
+        )
+        .await
+    }
+
+    pub async fn licensed_avatars(&self, n: i32, offset: i32) -> Result<VrchatResponse> {        self.execute(
             "app__vrchat_economy_licensed_avatars_get",
             "Getting licensed avatars.",
             licensed_avatars_get_input(VRCHAT_API_DEFAULT_ENDPOINT.into(), n, offset),
