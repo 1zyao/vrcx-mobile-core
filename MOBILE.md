@@ -404,3 +404,36 @@ logcat FATAL / AndroidRuntime / ClassNotFound           → 无
 ```
 
 三个临时方案现已全部退役：`-save-temps=obj`、`DOCS_RS=1`、`vendor/`。
+
+---
+
+## 决定：手机端 UI = VRCM 本体，React 那套已删除（2026-11-16）
+
+之前试过两条路，现在只留一条：
+
+```
+❌ 轨 A  React 版手机壳（src/mobile + mobile.html + dist-mobile + /m 路由）
+        我照 VRCM 截图手写的仿制品，和轨 B 完全重复
+✅ 轨 B  VRCM 的 Kotlin Compose App + VRCX-0 Rust 核心（in-process .so + loopback HTTP）
+```
+
+轨 A 已全部删除，桌面 React 前端同时恢复原状（去掉 `max-md` 补丁、`MobileNavButton`、
+窄屏 CSS、viewport-fit）。`npm run typecheck` 与 `npm run build` 均通过。
+
+轨 B 的当前进度：
+
+```
+Rust 侧（D:\vrcx0\mobile）
+  crates/command-server   泛型 CommandRegistry + /api/invoke + /api/events   6 测试
+  crates/mobile-host      MobileRuntimeHostState(SQLite) + app__feed_rows_query  4 测试
+  crates/mobile-core      start_core + JNI 入口，交叉编译 x86_64-linux-android
+                          libvrcx_0_mobile.so 22.8 MB，导出符号已验证
+
+VRCM 侧（D:\vrcm\vrcm-base，未提交）
+  androidMain/jniLibs/x86_64/libvrcx_0_mobile.so
+  androidMain/kotlin/core/NativeCore.kt            System.loadLibrary + external start
+  commonMain/kotlin/mobilecore/VrcxCoreClient.kt   Ktor，一个 invoke 服务所有命令
+  :composeApp:compileDebugKotlinAndroid            BUILD SUCCESSFUL (2m9s)
+```
+
+下一步：把 VRCM 的 VRCX Feed 页数据源从 JDBC/PG 换成 `VrcxCoreClient.feedRows()`。

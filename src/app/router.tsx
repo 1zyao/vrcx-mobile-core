@@ -20,11 +20,6 @@ import { useGlobalKeyboardShortcuts } from '@/components/layout/useGlobalKeyboar
 import { useSidebarAutoHide } from '@/components/layout/useSidebarAutoHide';
 import { useTrayShortcut } from '@/components/layout/useTrayShortcut';
 import { WindowResizeHandles } from '@/components/layout/WindowResizeHandles';
-import { MOBILE_SCREENS } from '@/features/mobile/mobileRoutes';
-import { MobileHomePage } from '@/features/mobile/MobileHomePage';
-import { MobileScreenStub } from '@/features/mobile/MobileScreenStub';
-import { MobileShell } from '@/features/mobile/MobileShell';
-import { useIsMobile } from '@/lib/use-mobile';
 import { cn } from '@/lib/utils';
 import { recordRouteEnter } from '@/services/telemetry/telemetryPageReach';
 import {
@@ -209,23 +204,6 @@ function AppRouterContent() {
     const isWindowsHost = hostPlatform === 'windows';
     const hasCustomWindowFrame =
         isWindowsHost && !window.__VRCX_SYSTEM_WINDOW_FRAME__;
-    // On a phone the desktop title bar is pure chrome (window buttons that mean
-    // nothing there); the /m shell draws its own top bar instead.
-    const hideDesktopChrome = useIsMobile();
-
-    // A phone always lands on the /m shell. The desktop pages are table-centric
-    // and are not meant to render at this width, and the remembered route may
-    // point at one of them from a previous desktop session.
-    const navigateToMobileEntry = useNavigate();
-    useEffect(() => {
-        if (!hideDesktopChrome || pathname.startsWith('/m')) {
-            return;
-        }
-        if (pathname === '/login') {
-            return;
-        }
-        navigateToMobileEntry('/m/feed', { replace: true });
-    }, [hideDesktopChrome, pathname, navigateToMobileEntry]);
 
     return (
         <QuickSearchProvider enabled={sessionReady}>
@@ -242,11 +220,7 @@ function AppRouterContent() {
                     aria-hidden="true"
                     className="vrcx-0-background-image-transition-layer"
                 />
-                {hideDesktopChrome ? null : isMacHost ? (
-                    <MacOverlayTitleBar />
-                ) : (
-                    <AppTitleBar />
-                )}
+                {isMacHost ? <MacOverlayTitleBar /> : <AppTitleBar />}
                 <div
                     data-vrcx-0-surface="route-host"
                     className="vrcx-0-route-host min-h-0 flex-1 overflow-hidden"
@@ -268,18 +242,9 @@ function AppRouterContent() {
 
                             <Route element={<RequireAuth />}>
                                 <Route element={<AppShellRoute />}>
-                                    <Route
+                                                                        <Route
                                         index
-                                        element={
-                                            hideDesktopChrome ? (
-                                                <Navigate
-                                                    to="/m/feed"
-                                                    replace
-                                                />
-                                            ) : (
-                                                <RememberedPageRedirect />
-                                            )
-                                        }
+                                        element={<RememberedPageRedirect />}
                                     />
                                     {protectedRoutes.map((route) => (
                                         <Route
@@ -288,45 +253,12 @@ function AppRouterContent() {
                                             element={route.element}
                                         />
                                     ))}
-                                    <Route
+                                                                        <Route
                                         path="*"
                                         element={
-                                            <Navigate
-                                                to={
-                                                    hideDesktopChrome
-                                                        ? '/m/feed'
-                                                        : '/feed'
-                                                }
-                                                replace
-                                            />
+                                            <Navigate to="/feed" replace />
                                         }
                                     />
-                                </Route>
-
-                                {/*
-                                 * Phone shell. A separate route tree rather than
-                                 * a responsive variant of the desktop one: the
-                                 * desktop pages are table-centric and cannot be
-                                 * made usable by breakpoints alone. These pages
-                                 * reuse the same repositories and stores, so
-                                 * there is only one data layer.
-                                 */}
-                                <Route path="/m" element={<MobileShell />}>
-                                    <Route
-                                        index
-                                        element={
-                                            <Navigate to="/m/home" replace />
-                                        }
-                                    />
-                                    {MOBILE_SCREENS.map((screen) => (
-                                        <Route
-                                            key={screen.path}
-                                            path={screen.path}
-                                            element={
-                                                screen.path === 'home' ? (<MobileHomePage />) : (<MobileScreenStub screen={screen} />)
-                                            }
-                                        />
-                                    ))}
                                 </Route>
                             </Route>
                         </Routes>
@@ -352,4 +284,5 @@ export function AppRouter() {
         </HashRouter>
     );
 }
+
 

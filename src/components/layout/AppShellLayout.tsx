@@ -169,9 +169,7 @@ export function AppShellLayout() {
                                     {sidebarWindowMode ? null : (
                                         <div
                                             data-vrcx-0-resize="side-panel"
-                                            // No resizer on a phone: the panel is
-                                            // not shown side-by-side there.
-                                            className="z-20 w-(--vrcx-0-side-panel-resizer-width) shrink-0 cursor-ew-resize bg-transparent select-none max-md:hidden"
+                                            className="z-20 w-(--vrcx-0-side-panel-resizer-width) shrink-0 cursor-ew-resize bg-transparent select-none"
                                             onPointerDown={startSidePanelResize}
                                         />
                                     )}
@@ -180,10 +178,6 @@ export function AppShellLayout() {
                                         sidebarWindowMode={sidebarWindowMode}
                                         className={cn(
                                             'shrink-0',
-                                            // On a phone the main content takes the
-                                            // whole width; friends/groups panels are
-                                            // reached through their own routes.
-                                            'max-md:hidden',
                                             sidebarWindowMode && 'min-w-0'
                                         )}
                                         style={{
@@ -204,3 +198,4 @@ export function AppShellLayout() {
         </div>
     );
 }
+
