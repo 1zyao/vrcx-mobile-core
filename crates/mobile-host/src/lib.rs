@@ -155,6 +155,25 @@ async fn app__feed_rows_query(
     blocking("feed rows", move || feed::feed_rows_query(&db, args.query)).await
 }
 
+/// Cloud keeps this runtime in a `OnceLock`; it carries the per-card cache, so it must outlive a
+/// single command invocation.
+static FAVORITE_DETAILS: std::sync::OnceLock<
+    vrcx_0_application::favorites::FavoriteDetailsRuntime,
+> = std::sync::OnceLock::new();
+
+async fn app__favorite_details_hydrate(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<vrcx_0_application::favorites::FavoriteDetailsHydrateInput>,
+) -> Result<vrcx_0_application::favorites::FavoriteDetailsHydrateOutput, CommandError> {
+    let expected_scope = state
+        .require_active_scope("Batch action")
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    let runtime = FAVORITE_DETAILS.get_or_init(|| state.favorite_details_runtime());
+    runtime
+        .hydrate(args.input, expected_scope)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))
+}
 async fn app__notification_list_query(
     state: Arc<RuntimeHostState>,
     args: QueryArgs<NotificationListQueryInput>,
@@ -532,6 +551,12 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         "app__notification_list_query",
         app__notification_list_query,
     );
+    registry.register_typed::<
+        InputArgs<vrcx_0_application::favorites::FavoriteDetailsHydrateInput>,
+        vrcx_0_application::favorites::FavoriteDetailsHydrateOutput,
+        _,
+        _,
+    >("app__favorite_details_hydrate", app__favorite_details_hydrate);
     registry.register_typed::<WorldGetArgs, vrcx_0_contracts::VrchatResponse, _, _>(
         "app__world_get",
         app__world_get,
@@ -659,7 +684,7 @@ mod tests {
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 28);
+        assert_eq!(registry.len(), 29);
     }
 }
 
@@ -799,6 +824,7 @@ async fn app__favorite_list(
     .map_err(|error| CommandError::failed(error.to_string()))?;
     Ok(rows)
 }
+
 
 
 

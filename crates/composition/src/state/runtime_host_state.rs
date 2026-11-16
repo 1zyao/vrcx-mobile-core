@@ -991,4 +991,45 @@ impl RuntimeHostState {
             .get(endpoint, &input.world_id, input.force, input.full)
             .await
     }
+
+    /// The favourite-details runtime, assembled the way cloud's `favorite_details_runtime()` does.
+    ///
+    /// Callers hold onto the returned value (cloud keeps it in a `OnceLock`) because it carries the
+    /// per-card cache; building one per call would throw that away.
+    pub fn favorite_details_runtime(
+        &self,
+    ) -> vrcx_0_application::favorites::FavoriteDetailsRuntime {
+        let assembly = self.desktop_assembly();
+        vrcx_0_application::favorites::FavoriteDetailsRuntime::new(
+            Arc::new(vrcx_0_outbound_adapters::VrchatFavoriteRemote::new(
+                Arc::clone(self.web_client()),
+                assembly.diagnostics().clone(),
+                assembly.sync().clone(),
+                Arc::clone(assembly.world_cache()),
+            )),
+            assembly.auth_scope().clone(),
+            Arc::clone(assembly.world_cache()),
+            Arc::clone(assembly.avatar_cache()),
+            assembly.tasks().clone(),
+        )
+    }
+
+    /// The active auth scope, or a readable error when no session is signed in.
+    ///
+    /// The batch reads (favourite details) are scoped: answering from a scope-less state would
+    /// return another identity's data.
+    pub fn require_active_scope(
+        &self,
+        label: &str,
+    ) -> vrcx_0_application_core::Result<vrcx_0_application_core::RuntimeAuthScopeSnapshot> {
+        let scope = self.runtime_context.auth_scope.snapshot();
+        if scope.active && !scope.current_user_id.trim().is_empty() {
+            Ok(scope)
+        } else {
+            Err(vrcx_0_application_core::Error::Custom(format!(
+                "{label} requires an authenticated session."
+            )))
+        }
+    }
 }
+
