@@ -146,10 +146,12 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
 
 /// Router state for `serve_loopback`.
 pub fn build_bus(state: RuntimeHostState) -> Arc<CommandBus<RuntimeHostState>> {
+    let events = EventBus::new(256);
+    state.event_bus().set_sink(BridgeSink(events.clone()));
     Arc::new(CommandBus {
         registry: Arc::new(build_registry()),
         state: Arc::new(state),
-        events: EventBus::new(256),
+        events,
     })
 }
 
@@ -220,4 +222,17 @@ async fn app__web_execute(
 }
 
 
+
+
+/// Bridges the runtime's typed event bus into the transport's broadcast channel,
+/// so `GET /api/events` delivers the same events the desktop receives over Tauri's
+/// `listen`. Without this the phone UI has no presence/notification updates - the
+/// friend board would stay empty no matter how many commands it issues.
+struct BridgeSink(EventBus);
+
+impl vrcx_0_application_core::RuntimeEventSink for BridgeSink {
+    fn emit(&self, event: &str, payload: serde_json::Value) {
+        self.0.publish(event.to_string(), payload);
+    }
+}
 

@@ -1003,3 +1003,43 @@ scripts/build-core.ps1  (VRCM 仓库)
 1. scripts/build-core.ps1          # 改过 Rust 之后
 2. gradlew :composeApp:installGithubDebug
 ```
+
+---
+
+## 事件通道接上运行时总线（2026-11-17）
+
+`GET /api/events` 之前是个空壳：`EventBus` 存在，但**没有任何东西往里推**。
+好友在场、通知、同步状态全都走事件的 —— 所以手机端永远收不到更新。
+
+桥接：
+
+```rust
+struct BridgeSink(EventBus);
+
+impl RuntimeEventSink for BridgeSink {
+    fn emit(&self, event: &str, payload: serde_json::Value) {
+        self.0.publish(event.to_string(), payload);
+    }
+}
+
+pub fn build_bus(state: RuntimeHostState) -> Arc<CommandBus<RuntimeHostState>> {
+    let events = EventBus::new(256);
+    state.event_bus().set_sink(BridgeSink(events.clone()));   // ← 关键一行
+    …
+}
+```
+
+`RuntimeHostState::event_bus()` 是我新加在 composition 上的访问器 —— 桌面用 Tauri 的
+`listen` 做 sink，手机用 loopback 广播做 sink，两者从同一个 `RuntimeEventBus` 取事件。
+
+事件名沿用 `T::EVENT_NAME`（46 种），payload 是同一个 `serde_json::Value`，
+所以桌面和手机收到的事件形状一致。
+
+### 验证
+
+```
+cargo test -p vrcx-0-mobile-core   → 4 passed
+```
+
+**尚未验证**：真机上 WS 是否真的收到事件。需要登录后才有事件产生
+（presence/notification 都依赖已认证会话）。

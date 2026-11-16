@@ -846,3 +846,13 @@ impl RuntimeHostState {
         self.runtime_context.auto_login_start(input).await
     }
 }
+
+impl RuntimeHostState {
+    /// Runtime event bus, see [`RuntimeHostContext::event_bus`].
+    ///
+    /// Needed by non-desktop transports: the desktop shell installs its Tauri bridge
+    /// as the sink, and the phone core installs its loopback broadcast instead.
+    pub fn event_bus(&self) -> &vrcx_0_application_core::RuntimeEventBus {
+        self.runtime_context.event_bus()
+    }
+}
