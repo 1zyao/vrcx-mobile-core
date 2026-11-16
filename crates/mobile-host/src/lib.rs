@@ -117,6 +117,10 @@ async fn app__vrchat_auth_auto_login_start(
 /// The command surface exposed to the phone UI.
 pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
     let mut registry = CommandRegistry::new();
+    registry.register_typed::<FavoriteListArgs, Vec<vrcx_0_contracts::FavoriteRow>, _, _>(
+        "app__favorite_list",
+        app__favorite_list,
+    );
     registry.register_typed::<QueryArgs<feed::FeedRowsQueryInput>, Vec<feed::FeedRowOutput>, _, _>(
         "app__feed_rows_query",
         app__feed_rows_query,
@@ -193,10 +197,11 @@ mod tests {
             "app__backend_runtime_combined_snapshot_get",
             "app__vrchat_auth_auto_login_start",
             "app__web_execute",
+            "app__favorite_list",
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 10);
+        assert_eq!(registry.len(), 11);
     }
 }
 
@@ -305,4 +310,37 @@ impl vrcx_0_application_core::RuntimeEventSink for TeeSink {
         self.second.emit(event, payload);
     }
 }
+
+
+/// Favorites read model, same name and argument shape as the desktop/cloud command
+/// (`arg(&args, "kind")` in cloud/crates/server/src/commands/local_data_queries.rs).
+///
+/// The favourites live in the local database that a recording node keeps; the phone
+/// only reads them. `FavoriteBaselineStore` is implemented by the persistence store,
+/// so no new data path is invented here.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct FavoriteListArgs {
+    kind: vrcx_0_core::FavoriteEntityKind,
+}
+
+async fn app__favorite_list(
+    state: Arc<RuntimeHostState>,
+    args: FavoriteListArgs,
+) -> Result<Vec<vrcx_0_contracts::FavoriteRow>, CommandError> {
+    let db = Arc::clone(state.database());
+    // Not the shared `blocking` helper: it insists on application_core::Error, while the
+    // store returns persistence::Error. Converting here keeps both error types untouched.
+    let rows = tokio::task::spawn_blocking(move || {
+        use vrcx_0_application_realtime::FavoriteBaselineStore;
+        let store = vrcx_0_outbound_adapters::PersistenceRealtimeStore::new(db);
+        store.favorite_list(None, args.kind)
+    })
+    .await
+    .map_err(|error| CommandError::failed(format!("favorite list task failed: {error}")))?
+    .map_err(|error| CommandError::failed(error.to_string()))?;
+    Ok(rows)
+}
+
+
 
