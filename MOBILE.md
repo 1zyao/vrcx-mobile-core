@@ -1080,3 +1080,46 @@ E   Response header `ContentType: text/plain`
 
 - 命令通道（HTTP）在同一个进程里工作正常，所以不是网络策略问题
 - 400 是应用层拒绝，不是 Android 明文流量拦截
+
+---
+
+## 事件通道打通（2026-11-17）
+
+```
+I VrcxCore: event stream connecting to http://127.0.0.1:36217
+I VrcxCore: event connected: null
+```
+
+### 根因：Ktor 只对 `ws://` 做升级
+
+之前传的是 `http://127.0.0.1:<port>/api/events`：
+
+```kotlin
+http.webSocket("$baseUrl/api/events")     // ❌ http:// → 普通 GET，无升级头
+```
+
+Ktor 对 http URL 不发 `Connection: Upgrade`，axum 的 `WebSocketUpgrade` 因此回 400。
+改成：
+
+```kotlin
+val wsUrl = baseUrl.replaceFirst("http", "ws") + "/api/events"
+http.webSocket(wsUrl)                     // ✅
+```
+
+这个错误的表现有误导性：客户端抛的是 `NoTransformationFoundException`
+（"无法把响应转成 WebSocket 会话"），像是客户端插件没装，实际是**协议字符串写错**。
+
+### 正面信号
+
+在 `webSocket { }` 块内先发一条 `connected` 事件 —— 该块只在升级成功后执行，
+所以它同时是给调用方的可靠信号和真机探针的证据。
+
+### 现在两侧都通
+
+```
+命令：POST /api/invoke      ✅ 真机（拿到 VRChat config）
+事件：GET  /api/events (WS) ✅ 真机（握手成功，会话保持）
+```
+
+事件的实际内容还没验（需要已认证会话才会产生 presence/notification），
+但管道两端都已证明可用。
