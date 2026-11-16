@@ -90,7 +90,66 @@ impl AppPaths {
     }
 }
 
+/// Android/iOS have no `dirs::config_dir()`:
+/// `dirs-sys` returns `None` from its unix `fallback()` for both, and Android
+/// does not export a usable `HOME`, so the desktop resolution above cannot work.
+///
+/// Android: the app's private files dir is `/data/user/0/<package>/files`.
+/// The package is recovered from `/proc/self/cmdline` (the first NUL-separated
+/// token, with any `:component` suffix stripped), avoiding a JNI dependency in
+/// this otherwise host-neutral crate.
+///
+/// iOS: the sandbox exports `HOME`, so `dirs::home_dir()` is usable; app data
+/// belongs under `Library/Application Support`.
+#[cfg(any(target_os = "android", target_os = "ios"))]
+fn mobile_app_data_dir() -> Result<PathBuf, Error> {
+    #[cfg(target_os = "android")]
+    {
+        use std::ffi::OsString;
+        use std::os::unix::ffi::OsStringExt;
+
+        let cmdline = std::fs::read("/proc/self/cmdline")
+            .map_err(|error| Error::Custom(format!("cannot read /proc/self/cmdline: {error}")))?;
+        let raw = cmdline
+            .split(|byte| *byte == 0)
+            .next()
+            .filter(|token| !token.is_empty())
+            .ok_or_else(|| Error::Custom("empty /proc/self/cmdline".into()))?;
+        let process_name = OsString::from_vec(raw.to_vec());
+        let process_name = process_name.to_string_lossy();
+        let package = process_name
+            .split(':')
+            .next()
+            .unwrap_or_default()
+            .trim()
+            .to_string();
+        if package.is_empty() {
+            return Err(Error::Custom("cannot determine android package name".into()));
+        }
+        return Ok(PathBuf::from("/data/user/0")
+            .join(package)
+            .join("files")
+            .join(APP_DIR_NAME));
+    }
+
+    #[cfg(target_os = "ios")]
+    {
+        let home = dirs::home_dir()
+            .ok_or_else(|| Error::Custom("cannot resolve iOS home directory".into()))?;
+        Ok(home
+            .join("Library")
+            .join("Application Support")
+            .join(APP_DIR_NAME))
+    }
+}
+
 pub fn default_app_data_dir() -> Result<PathBuf, Error> {
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    {
+        return mobile_app_data_dir();
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     Ok(dirs::config_dir()
         .ok_or_else(|| Error::Custom("cannot resolve AppData".into()))?
         .join(APP_DIR_NAME))
