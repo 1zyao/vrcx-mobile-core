@@ -1201,3 +1201,55 @@ web_execute      → state.web_client()（同一个 web）
 - 登录本身是否成功（账号/2FA）
 - 已认证请求的返回内容是否正确（而不是 401）
 - 事件流在已认证会话下是否产生 presence/notification
+
+---
+
+## 读接口批量替换：UsersApi 三个方法（2026-11-17）
+
+已切到核心的读方法：
+
+```
+fetchUser(userId)        → vrchatGet("users/{id}")
+getUserGroups(userId)    → vrchatGet("users/{id}/groups")
+getMutualFriends(...)    → vrchatGet("users/{id}/mutuals/friends?n=&offset=")
+```
+
+模式固定为：
+
+```kotlin
+if (isVrcxCoreReady()) {
+    Json.decodeFromJsonElement(Deserializer, vrcxCoreClient().vrchatGet(path))
+} else {
+    client.get(path).checkSuccess<Dto>()          // 旧路径保留
+}
+```
+
+### 一个 Kotlin 限制导致没法抽 helper
+
+先试过写泛型 helper：
+
+```kotlin
+private suspend fun <T> read(path: String, deserializer: DeserializationStrategy<T>): T
+```
+
+编译失败：`checkSuccess` 是 **reified inline**，无法接收显式的
+`DeserializationStrategy`（`Cannot use 'T' as reified type parameter`）。
+所以每个方法只能内联那段 if/else，无法收成一个函数。
+
+### 真正的解法：换 Ktor 引擎
+
+逐个方法改是 O(40)。正确做法是**替换 Ktor 的 engine**，让所有请求经由核心：
+
+```kotlin
+HttpClient(CoreEngine()) { configureApiClient(...) }     // NetworkModule.kt:79
+```
+
+`CoreEngine` 实现 `HttpClientEngine`，把 `HttpRequestData` 转成
+`app__web_execute` 调用，再把结果包成 `HttpResponseData`。
+
+好处：`network/` 里**一行方法都不用改**，全部自动走核心。
+而且不需要 gate —— engine 内部判断核心是否就绪，未就绪就转发给默认引擎。
+
+**这件事需要先查 Ktor 3.x 的 `HttpClientEngine` 接口签名**（`execute` 的参数、
+`HttpResponseData` 的构造参数、`callContext` 的变化）。我这次没有凭记忆写，
+因为接口对不上会白费几轮。
