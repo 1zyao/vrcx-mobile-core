@@ -658,3 +658,24 @@ impl RuntimeHostContext {
         vrcx_0_application::auth::saved_snapshot(self.auth_credentials.as_ref())
     }
 }
+
+impl RuntimeHostContext {
+    /// Starts a login from stored credentials (session restore on launch).
+    ///
+    /// Unlike start/respond/cancel/end, the shared runtime host does not expose
+    /// this, so the facade is defined here for hosts that hold the context.
+    pub async fn auto_login_start(
+        &self,
+        input: vrcx_0_application::auth::AutoLoginStartInput,
+    ) -> vrcx_0_application_core::Result<vrcx_0_application::auth::AutoLoginOutcome> {
+        self.login_session
+            .auto_login_start(
+                Arc::clone(&self.login_api),
+                self.auth_cookies.as_ref(),
+                self.auth_credentials.as_ref(),
+                input,
+                &|_| Ok(()),
+            )
+            .await
+    }
+}

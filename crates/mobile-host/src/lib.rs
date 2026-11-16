@@ -13,7 +13,8 @@ use std::sync::Arc;
 use vrcx_0_command_server::{CommandBus, CommandError, CommandRegistry, EventBus};
 use vrcx_0_composition::RuntimeHostState;
 use vrcx_0_application::auth::{
-    LoginSessionCancelInput, LoginSessionEnd, LoginSessionRespondInput, LoginSessionStartInput,
+    AutoLoginStartInput, LoginSessionCancelInput, LoginSessionEnd, LoginSessionRespondInput,
+    LoginSessionStartInput,
 };
 use vrcx_0_persistence::feed;
 
@@ -90,6 +91,17 @@ async fn app__backend_runtime_combined_snapshot_get(
         .map_err(|error| CommandError::failed(error.to_string()))
 }
 
+async fn app__vrchat_auth_auto_login_start(
+    state: Arc<RuntimeHostState>,
+    input: AutoLoginStartInput,
+) -> Result<serde_json::Value, CommandError> {
+    let outcome = state
+        .auto_login_start(input)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(outcome).map_err(|error| CommandError::failed(error.to_string()))
+}
+
 /// The command surface exposed to the phone UI.
 pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
     let mut registry = CommandRegistry::new();
@@ -121,6 +133,10 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         "app__backend_runtime_combined_snapshot_get",
         app__backend_runtime_combined_snapshot_get,
     );
+    registry.register_typed::<AutoLoginStartInput, serde_json::Value, _, _>(
+        "app__vrchat_auth_auto_login_start",
+        app__vrchat_auth_auto_login_start,
+    );
     registry
 }
 
@@ -150,12 +166,14 @@ mod tests {
             "app__vrchat_auth_session_end",
             "app__vrchat_auth_saved_snapshot_get",
             "app__backend_runtime_combined_snapshot_get",
+            "app__vrchat_auth_auto_login_start",
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 7);
+        assert_eq!(registry.len(), 8);
     }
 }
+
 
 
 

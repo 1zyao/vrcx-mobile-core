@@ -835,3 +835,14 @@ impl RuntimeHostState {
         self.runtime_context.saved_auth_snapshot()
     }
 }
+
+impl RuntimeHostState {
+    /// Session restore, see [`RuntimeHostContext::auto_login_start`].
+    pub async fn auto_login_start(
+        &self,
+        input: vrcx_0_application::auth::AutoLoginStartInput,
+    ) -> vrcx_0_application_core::Result<vrcx_0_application::auth::AutoLoginOutcome>
+    {
+        self.runtime_context.auto_login_start(input).await
+    }
+}
