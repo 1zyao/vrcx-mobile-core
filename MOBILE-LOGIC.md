@@ -801,3 +801,91 @@ WorldsApi            deleteWorld, getFavoritedWorlds, getRecentWorlds, getWorldB
 5. **写操作**（好友请求、邀请、收藏增删、封禁…）→ 用规范写命令，不是读模型
 
 写操作要格外小心：它们是真正会改账号数据的，验证只能用"反序列化阶段失败"的方式（见第 15 轮的做法），不能拿真实账号试。
+
+---
+
+# 第 37 轮：读域清零，写操作仍未接
+
+## 全站巡检（真机，一次走完）
+
+页面：首页（位置 + 动态）、收藏（玩家/世界/模型/群组 4 个 tab）、通知、搜索、房间/世界页。
+
+```
+VRChat proxy 请求：0 条
+异常（VrcxCoreException / FATAL / 序列化 / MissingField）：无
+```
+
+房间卡片、收藏列表、通知列表、动态列表均正常渲染。所以"手机端不直接请求 api.vrchat.cloud
+的业务端点"这一条，**在**这些页面上成立，且是运行时证据，不是代码推断。
+
+## 已经由核心提供的读（各轮 curl + 真机验证）
+
+| 域 | 命令 | 验证方式 |
+|---|---|---|
+| 动态 | `app__feed_rows_query` | 本地读模型，顶部为 04:46 的真实记录 |
+| 通知 | `app__notification_list_query` | curl 10 条真实数据 |
+| 好友 | `app__social_friend_roster_baseline_get` | count=69 |
+| 收藏 | `app__social_favorites_baseline_get` | 77 条 `remoteFavoritesById` |
+| 收藏详情（模型） | `app__favorite_details_hydrate` | `requestedIds` 触发抓取；真机模型 tab 有内容 |
+| 收藏详情（世界） | `app__vrchat_favorite_worlds_get` | curl 2 条含 favoriteId/favoriteGroup |
+| 世界 | `app__world_get` | summary / full 两态 |
+| 世界搜索 | `app__vrchat_search_worlds_get` | 200，含 `releaseStatus=all` → 403 的坑 |
+| 实例 | `app__vrchat_instance_get` | world=Kyrravik users=3 |
+| 用户 | `app__vrchat_user_get` / `user_profile_get` | 200 |
+| 用户群组 | `app__vrchat_group_user_groups_get` / `user_represented_group_get` | 57 个群组 |
+| 群组 | `app__vrchat_group_get` | 200 |
+| 模型列表 | `app__vrchat_avatar_list_by_user_get` | Salt、白云_EFT |
+| 玩家屏蔽 | `app__local_moderation_list` | 0 条（该库无记录） |
+| 文件元数据 | `app__file_metadata_get` | id / name / ownerId |
+| 文件分析 | `app__vrchat_auth_file_analysis_get` | `variant=security` → fileSize 343682971 |
+| 标记已读 | `app__notification_mark_seen_batch` | 无会话时给可读错误 |
+
+注册表：37 条命令。
+
+## 仍未接的 94 个调用点（全部是"动作/写"或未移植的域）
+
+```
+AuthApi                approveDevice, deviceAuthInfo, isAuthed, userRes, verify
+AvatarModerationApi    blockAvatar, getAvatarModerations, unblockAvatar
+AvatarsApi             deleteAvatar, deleteImpostor, enqueueImpostor, getAvatarById, getAvatarStyles,
+                       getImpostorQueueStats, selectAvatar, selectFallbackAvatar, updateAvatar
+EconomyApi             getCreditsBalance
+FavoriteApi            addFavorite, clearFavoriteGroup, getFavoriteGroupsByType, updateFavoriteGroup
+FeedbackApi            reportConfig, submitReport
+FileApi                deleteFile, findImageFileLocal, getAvatarGalleryFiles, getFileInfo, getFiles
+FriendsApi             deleteFriendRequest, sendFriendRequest, unfriend
+GroupsApi              getGroupGalleryImages, getGroupInstances, getGroupMembers, getGroupPosts,
+                       getUserGroupInstances, joinGroup, leaveGroup, searchGroups,
+                       updateGroupNotifications, updateRepresentation
+InstancesApi           closeInstance, closeStatus, createInstance
+InventoryApi           getInventory, getTemplate, redeemReward
+InviteApi              getInviteMessages, inviteMyselfToInstance, inviteUser, requestInvite,
+                       resetInviteMessage, updateInviteMessage
+NotificationApi        acceptFriendRequest, clearAllNotifications, deleteNotification,
+                       deleteNotificationV2, responseNotification, mark*AsRead (旧路径已不再被模型调用)
+PlayerChatboxApi / PlayerModerationApi   moderate, remove, getForTarget
+PrintsApi              deletePrint, getPrint, getUserPrints
+ProfileAppearanceApi   update
+UsersApi               addTags, blockUser, boop, createPlayerInteractionOverride,
+                       deleteWorldPersistence, getMutualFriends, getPlayerInteractionSnapshot,
+                       getRepresentedGroup(旧), hasWorldPersistence, isUserBlocked,
+                       removePlayerInteractionOverride, removeTags, saveUserNote, unblockUser,
+                       updateUserInfo
+VrchatStatusApi        fetchStatus
+WorldsApi              deleteWorld, getRecentWorlds, getWorldPublishStatus, publishWorld,
+                       unpublishWorld, updateWorld
+```
+
+## 为什么停在这里
+
+剩下的几乎都是**写操作**（加好友、发邀请、收藏增删、封禁、发公告…）。它们的验收方式与读不同：
+不能拿真实账号去执行，只能验证"参数形状 + 无会话时的可读拒绝"，成功路径要用户亲自触发。
+
+继续做的正确顺序是：先挑**低风险且可重复**的写（收藏增删、加入/退出群组），再挑**不可逆**的
+（解除好友、封禁、删世界）。不可逆的那些，移植后必须由用户点一次确认。
+
+## 已知的语义缺口（不是 bug，是取舍）
+
+- 群组读走的是原始读，不是 VRCX 的 groups 服务：手机端没有群组级缓存。
+- 收藏世界不支持 `search/sort/featured/...`：命令没有这些参数，传了会**报错而不是静默忽略**。
+- 玩家屏蔽的非空映射未在真机验证：该账号库中没有屏蔽记录。
