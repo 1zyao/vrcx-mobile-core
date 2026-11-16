@@ -624,3 +624,24 @@ impl RuntimeHostContext {
 
 }
 
+
+impl RuntimeHostContext {
+    /// Answers a login challenge (2FA code, device approval, …).
+    ///
+    /// Uses `respond_and_transition` rather than `respond` because the latter is
+    /// `#[cfg(test)]` in the login session runtime; the state is returned, so the
+    /// UI never needs a separate phase query.
+    pub async fn respond_login_session(
+        &self,
+        input: vrcx_0_application::auth::LoginSessionRespondInput,
+    ) -> vrcx_0_application::auth::LoginSessionState {
+        self.login_session
+            .respond_and_transition(
+                input,
+                self.auth_cookies.as_ref(),
+                self.auth_credentials.as_ref(),
+                &|_| Ok(()),
+            )
+            .await
+    }
+}

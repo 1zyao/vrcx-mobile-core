@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 use vrcx_0_command_server::{CommandBus, CommandError, CommandRegistry, EventBus};
 use vrcx_0_composition::RuntimeHostState;
-use vrcx_0_application::auth::{LoginSessionCancelInput, LoginSessionStartInput};
+use vrcx_0_application::auth::{LoginSessionCancelInput, LoginSessionRespondInput, LoginSessionStartInput};
 use vrcx_0_persistence::feed;
 
 /// Runs a synchronous persistence call off the async workers.
@@ -51,6 +51,14 @@ async fn app__vrchat_auth_session_cancel(
     serde_json::to_value(outcome).map_err(|error| CommandError::failed(error.to_string()))
 }
 
+async fn app__vrchat_auth_session_respond(
+    state: Arc<RuntimeHostState>,
+    input: LoginSessionRespondInput,
+) -> Result<serde_json::Value, CommandError> {
+    let outcome = state.respond_login_session(input).await;
+    serde_json::to_value(outcome).map_err(|error| CommandError::failed(error.to_string()))
+}
+
 /// The command surface exposed to the phone UI.
 pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
     let mut registry = CommandRegistry::new();
@@ -61,6 +69,10 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
     registry.register_typed::<LoginSessionStartInput, serde_json::Value, _, _>(
         "app__vrchat_auth_session_start",
         app__vrchat_auth_session_start,
+    );
+    registry.register_typed::<LoginSessionRespondInput, serde_json::Value, _, _>(
+        "app__vrchat_auth_session_respond",
+        app__vrchat_auth_session_respond,
     );
     registry.register_typed::<LoginSessionCancelInput, serde_json::Value, _, _>(
         "app__vrchat_auth_session_cancel",
@@ -91,9 +103,11 @@ mod tests {
             "app__feed_rows_query",
             "app__vrchat_auth_session_start",
             "app__vrchat_auth_session_cancel",
+            "app__vrchat_auth_session_respond",
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 3);
+        assert_eq!(registry.len(), 4);
     }
 }
+
