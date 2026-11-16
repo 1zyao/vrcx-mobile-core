@@ -1578,3 +1578,53 @@ cargo check -p vrcx-0-headless -p vrcx-0-command-server -p vrcx-0-mobile-core   
      state.set_event_sink(TeeEventSink { console: console_sink.clone(), bus: BridgeSink::new(events.clone()) });
      tokio::spawn(serve_on(build_bus(Arc::clone(&state)), port));
 ```
+
+---
+
+## headless 命令总线已接线（2026-11-17）
+
+`--command-bus-port <port>` 启用：
+
+```rust
+let state = Arc::new(RuntimeHostState::new(...)?);      // 从按值改为 Arc
+…
+Some(port) => {
+    let events = EventBus::new(256);
+    state.set_event_sink(TeeSink {                       // 控制台 sink 保留
+        first: Arc::new(console_sink.clone()),
+        second: Arc::new(BridgeSink::new(events)),
+    });
+    let bus = build_bus(Arc::clone(&state));
+    serve_on(bus, port).await?;
+    println!("command bus listening on http://{address}/api/invoke");
+}
+```
+
+`TeeSink` 放在 `mobile-host` 里（它已有 serde_json 依赖），headless 不必新增依赖。
+
+### 验证结果（有缺口，须说明）
+
+```
+$ vrcx-0-headless --data-dir <dir> --command-bus-port 8898
+command bus listening on http://127.0.0.1:8898/api/invoke      ← 绑定成功
+headless login failed: No saved account is available…
+（进程退出）
+```
+
+**总线确实起来并绑定了端口，但进程随即因为"没有已保存账号"退出**，
+所以 curl 打不进去 —— 我做了 40 次快速重试（100ms 间隔）仍失败，窗口太短。
+
+要让这条可验证，有两条路：
+
+1. 给 headless 一个账号（`--login` 走 stdin，或先跑一次登录）
+2. 加一个 `--command-bus-only` 模式：只服务总线、不做后端运行时
+   （对"只读查询节点"这个场景其实更合理）
+
+在验证之前，我**不能声称 headless 的命令总线可用** —— 只能说它绑定成功。
+
+### 编译
+
+```
+cargo check -p vrcx-0-headless                              EXIT=0
+cargo build -p vrcx-0-headless                              EXIT=0（31.8 MB）
+```

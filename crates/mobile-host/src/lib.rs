@@ -277,3 +277,19 @@ struct DebugEmitInput {
 static DEBUG_EVENTS: std::sync::OnceLock<EventBus> = std::sync::OnceLock::new();
 
 
+
+/// Forwards runtime events to two sinks.
+///
+/// A host that already logs events (the headless console sink) must not lose them
+/// when the command bus is enabled, so both destinations receive every event.
+pub struct TeeSink {
+    pub first: std::sync::Arc<dyn vrcx_0_application_core::RuntimeEventSink>,
+    pub second: std::sync::Arc<dyn vrcx_0_application_core::RuntimeEventSink>,
+}
+
+impl vrcx_0_application_core::RuntimeEventSink for TeeSink {
+    fn emit(&self, event: &str, payload: serde_json::Value) {
+        self.first.emit(event, payload.clone());
+        self.second.emit(event, payload);
+    }
+}
