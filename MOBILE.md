@@ -226,3 +226,41 @@ npx tauri android build --debug --apk --target aarch64
 
 - **release 签名**：现在只有 debug APK。release 要配 `signingConfig` + keystore。
 - **真机/模拟器验证**：还没有设备跑过，所以前面三个运行时修复仍只是编译级验证。
+
+---
+
+## 运行时验证（2026-11-16，MuMu 12 / Android 15 / SDK 35 / x86_64）
+
+安装 `VRCX-0-mobile-debug-x86_64.apk` 后启动，**登录界面正常渲染**，
+进程存活无 `FATAL` / `AndroidRuntime` / `ClassNotFoundException`。
+
+三个运行时阻塞的实测证据：
+
+| # | 修复 | 实测证据 |
+|---|---|---|
+① | app data dir | `/data/user/0/com.vrcx_0.app/files/VRCX-0/` 下生成 `VRCX-0.sqlite3` (282 KB) + `-wal`/`-shm` |
+③ | secrets key | `secrets.key` **32 字节**，权限 `-rw-------` |
+② | TLS webpki roots | **只有编译级验证** —— 需要真实 VRChat 账号登录才能触发 HTTPS/WS，未验 |
+
+## 关键前提：依赖必须 vendored
+
+本机 `D:\vrcx0` 被打了 **低完整性标签**：
+
+```
+D:\vrcx0          Mandatory Label\Low Mandatory Level:(OI)(CI)(NW)
+D:\Tools\...\registry       ← 无标签（默认 Medium）
+```
+
+于是 cargo 拉起的 build script / clang 只能写工作区内的目录，写 registry 会
+`os error 5 (拒绝访问)`。表现就是：
+
+- `tauri-plugin` 无法在 registry 里建 `android/.tauri` → 插件 Kotlin 类进不了 APK
+  → 启动时 `WryActivity.getAppClass` 抛 `ClassNotFoundException` 直接崩
+- `clang` 编译 `.S` 时 `unable to make temporary file`（系统临时目录在 Medium）
+
+解法：`cargo vendor --versioned-dirs vendor`（1.19 GB，已 gitignore）+
+`.cargo/config.toml` 里 source replacement。依赖落在工作区内，写入就正常了。
+`vendor/` 缺失时重新生成即可。
+
+> 如果不想占 1.2 GB，替代方案是把 `CARGO_HOME` 指到工作区里
+> （`D:\vrcx0\.cargo-home`），代价是依赖重新下载一遍。
