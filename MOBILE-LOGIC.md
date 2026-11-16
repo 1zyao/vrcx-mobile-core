@@ -544,3 +544,61 @@ VRChat 动作  app__vrchat_avatar_select / _delete / _styles_get …
 
 `app__favorite_list {kind:"avatar"}` 就是 `getFavoritedAvatars` 的实现方式 —— 
 所以 favorites 那条命令不只服务收藏页，也服务头像页。一个命令覆盖两处需求。
+
+---
+
+# 第 11 轮：`app__vrchat_avatar_styles_get` 的移植定位（未完成）
+
+## 已完成：定位
+
+```
+cloud 的实现：crates/server/src/commands/vrchat_proxy.rs:341
+    "app__vrchat_avatar_styles_get",
+    |state, _args| async move { ok(state.vrchat_remote().avatar_styles().await?) },
+
+门面本体（fork 里就有）：crates/application/src/remote/vrchat_facade.rs
+    pub struct VrchatRemoteFacade { api: VrchatApiRuntime, … }
+    pub async fn avatar_styles(&self) -> Result<VrchatResponse>          // :336
+
+请求构造函数（fork 里也有）：
+    crates/application/src/remote/vrchat_proxy/avatars.rs:96
+    pub fn avatar_styles_get_input(endpoint: String) -> VrchatRequest
+```
+
+所以命令面、门面、请求构造器**三者 fork 都具备**，缺的只是**把门面接进 host**。
+
+## 卡点（下一轮从这里开始）
+
+`VrchatRemoteFacade` 的构造：它的字段是 `api: VrchatApiRuntime`（私有），
+而 fork 里搜不到 `VrchatFacade::new` / `VrchatRemoteFacade::new` 的调用点 ——
+说明它是由 composition 在内部构造的（cloud 那边通过 `state.vrchat_remote()` 暴露）。
+
+因此要给 fork 加：
+
+```
+1. RuntimeHostContext / RuntimeHostState 上的 vrchat_remote() 访问器
+   （或一个最小的 facade 构造：VrchatApiRuntime 需要 web_client + 配置）
+2. 然后 app__vrchat_avatar_styles_get 只是 3 行注册
+3. curl 验证
+```
+
+## 这一轮的价值
+
+把"能不能搬写操作类命令"这个问题答清楚了：
+
+- 命令名与参数形状：**有**（cloud 里现成）
+- 门面实现：**fork 已有**（`vrchat_facade.rs`）
+- 缺的只有 **host 上的一个访问器 + 一个构造**
+
+也就是说 41 条 `vrchat_mutations` / `vrchat_proxy` 里的命令，移植成本集中在
+**先把 facade 接进 host 这一处**，之后每条命令都是几行。
+
+## 下一步（明确）
+
+```
+a. 读 VrchatApiRuntime 的构造要求（需要哪些依赖）
+b. 在 composition 里构造 VrchatRemoteFacade 并挂到 RuntimeHostState
+c. 注册 app__vrchat_avatar_styles_get
+d. curl 打真进程验证
+e. 之后批量搬其它 app__vrchat_* 命令
+```
