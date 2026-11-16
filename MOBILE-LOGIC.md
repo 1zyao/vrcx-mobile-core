@@ -286,3 +286,75 @@ MuMu 模拟器 ──HTTP──> 10.0.2.2:8891 ──> 主机上的独立 VRCX �
 - ✅ 读模型：`app__feed_rows_query` 返回真实行（第 1 轮验证）
 - ❌ 同步：后端持有的是**桌面库的副本**，不是 remoteSync 同步来的
 - ❌ UI：`FriendActivityTimelineSource` 的 Backend 实现还没写，页面上还看不到
+
+---
+
+# 第 5 轮：耦合面核查 + 规范命令名（关键结构发现）
+
+## 一、核查结果（改了计划）
+
+```
+presentation 文件总数            276
+直接 import network.api.*        96   ← 35%
+被使用的 Api 类                  16 个
+AvatarModerationApi, AvatarsApi, EconomyApi, FavoriteApi, FileApi, GroupsApi,
+InstancesApi, InventoryApi, InviteApi, NotificationApi, PlayerChatboxModerationApi,
+PlayerModerationApi, PrintsApi, ProfileAppearanceApi, UsersApi, WorldsApi
+```
+
+**结论：`service/` 不是唯一出口。** 原计划"重写 service 层即可"是错的。
+
+### 修正后的分层决定
+
+保留 `network/api/*` 作为**适配层**（它实际上就是 VRCX 文档里 `repositories/` 的角色）：
+
+```
+presentation/            一行不改（96 个文件保持原样）
+network/api/XxxApi.kt    方法体从「发 VRChat 请求」改成「调语义命令」
+service/                 逐域替换
+VrcxCoreClient           = webTransport.ts（纯 invoke + 事件）
+```
+
+比"重写 96 个 presentation 文件"风险低一个数量级，且符合"名字/载荷即协议"。
+
+## 二、规范命令名（照抄 cloud，不再自造）
+
+```
+app__social_friend_roster_baseline_get     好友名单基线
+app__social_unfriend / _selection
+app__social_friend_request_send / cancel / notification_accept
+app__current_user_refresh
+app__friend_profile_load_start / _cancel
+app__friend_log_names_resolve / _cancel
+app__user_groups_overview_get
+app__vrchat_auth_current_user_get
+app__feed_rows_query / app__feed_latest_query / app__feed_search_query
+```
+
+## 三、发现一个必须先解决的形状错配
+
+VRCM 的 `FriendsApi.fetchFriendList` 期待**一次调用返回完整列表**（`GET auth/user/friends`）。
+
+而 VRCX 的模型是：
+
+```
+app__social_friend_roster_baseline_get   → 基线快照
++ realtimeFriendProjection（事件）        → 后续增量 patch
+```
+
+**没有"给我好友列表"这一条命令。** 所以适配 `FriendsApi` 不是换个 URL 那么简单，
+需要在适配层做一次"基线 + patch"的合并，或者 fork 里补一条返回扁平列表的读模型命令。
+
+这个决定要你拍板：
+
+- **方案 A**：适配层自己合并（`roster_baseline` 拿到基线，事件流里挑 patch 应用）
+  —— 不改后端，但适配层变厚
+- **方案 B**：fork 里加一条 `app__friends_flat_get`（后端拼好扁平列表）
+  —— 适配层薄，但**新增了规范里没有的命令**（与你刚强调的原则冲突）
+
+我倾向 **A**，因为它不新增协议。
+
+## 四、本轮没有代码改动
+
+只有这份核查结论。下一步先 curl 验证 `app__social_friend_roster_baseline_get`
+的真实返回结构，再决定 A 的合并逻辑。

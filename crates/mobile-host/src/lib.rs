@@ -30,12 +30,24 @@ where
         .map_err(|error| CommandError::failed(error.to_string()))
 }
 
+/// Canonical argument envelope.
+///
+/// The desktop and cloud frontends wrap the input in a key named after the command's
+/// parameter (`arg(&args, "query")` in cloud/crates/server/src/commands/local.rs), so
+/// the wire shape is `{"query": {...}}`. Keeping the same shape here is what makes
+/// VRCM literally the same frontend as the React app.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct QueryArgs<T> {
+    query: T,
+}
+
 async fn app__feed_rows_query(
     state: Arc<RuntimeHostState>,
-    input: feed::FeedRowsQueryInput,
+    args: QueryArgs<feed::FeedRowsQueryInput>,
 ) -> Result<Vec<feed::FeedRowOutput>, CommandError> {
     let db = Arc::clone(state.database());
-    blocking("feed rows", move || feed::feed_rows_query(&db, input)).await
+    blocking("feed rows", move || feed::feed_rows_query(&db, args.query)).await
 }
 
 async fn app__vrchat_auth_session_start(
@@ -105,7 +117,7 @@ async fn app__vrchat_auth_auto_login_start(
 /// The command surface exposed to the phone UI.
 pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
     let mut registry = CommandRegistry::new();
-    registry.register_typed::<feed::FeedRowsQueryInput, Vec<feed::FeedRowOutput>, _, _>(
+    registry.register_typed::<QueryArgs<feed::FeedRowsQueryInput>, Vec<feed::FeedRowOutput>, _, _>(
         "app__feed_rows_query",
         app__feed_rows_query,
     );
@@ -293,3 +305,4 @@ impl vrcx_0_application_core::RuntimeEventSink for TeeSink {
         self.second.emit(event, payload);
     }
 }
+
