@@ -1485,3 +1485,40 @@ runs-on: macos-latest
 
 **推送需要你的授权** —— 会用你的 GitHub 凭据，而且是对你 fork 的写操作。
 推上去之后 CI 才会跑。要我推吗？
+
+---
+
+## 补上超时：核心卡死不再挂住 UI（2026-11-17）
+
+子代理写引擎时明确标记过这个缺口：`HttpTimeout` 的 capability 不会传给
+`CoreHttpEngine`，所以核心那边如果命令不返回，请求会**永远挂着**。
+
+修法（`CoreHttpEngine.execute` 内）：
+
+```kotlin
+val result = withTimeoutOrNull(60_000L) {
+    vrcxCoreClient().invoke("app__web_execute", ...)
+} ?: return errorResponse(..., message = "VRCX core did not answer within 60000 ms (GET …)")
+```
+
+60 s 对齐的是客户端原本应有的 socket 超时 —— 足够慢响应，又不至于让 UI 卡死。
+
+验证：
+
+```
+compileGithubDebugKotlinAndroid + compileKotlinDesktop   BUILD SUCCESSFUL (35s)
+installGithubDebug + 启动                                 EXIT=0，core ready / event connected / probeEvent / 无 FATAL
+```
+
+提交 `33ba799`（`vrcx-core` 分支第 5 个提交）。
+
+### 分支现状
+
+```
+33ba799  fix: bound the core round trip
+d7edbb7  build: cross-compile the core into jniLibs
+c6ed9f2  feat: transport all VRChat traffic through the core
+52e8b32  feat: run the login lifecycle through the core
+5b30797  feat: load the VRCX-0 core in-process
+3f8b027  chore(release): bump version to 1.1.6   ← 1.1.6 基线
+```
