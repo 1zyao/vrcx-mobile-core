@@ -478,3 +478,61 @@ MainActivity
 - `.so` debug 体积 117.9 MB —— release 待实测
 - VRCM 侧改动（3 个 Kotlin 文件 + `.so` + manifest + res/xml）尚未在该仓库提交
 - 下一步：搬 `vrchat_proxy` 的 41 条代理命令，并接 `/api/events`
+
+---
+
+## 登录门面的落点与签名（2026-11-17 确认）
+
+`LoginSessionRuntime` 的每个方法都要四样依赖，**它们全部在 `RuntimeHostContext` 里**：
+
+```rust
+// composition/src/context.rs
+pub(crate) login_session: LoginSessionRuntime,          // 65
+pub(crate) auth_credentials: Arc<dyn AuthCredentialStore>,  // 66
+pub(crate) login_api: Arc<dyn LoginApi>,                    // 67
+pub(crate) auth_cookies: Arc<dyn AuthSessionCookies>,       // 68
+```
+
+而且 context 已有同类访问器先例（`auth_credentials()` / `auth_credentials_shared()`，175–180 行）。
+
+**结论：门面写在 `composition`，不写在 `mobile-host`。** 否则 mobile-host 得自己再拿一遍这四样，等于重复组装。
+
+### 要加的方法（签名已确定）
+
+```rust
+impl RuntimeHostContext {
+    pub async fn start_login_session(&self, input: LoginSessionStartInput) -> LoginSessionState {
+        self.login_session
+            .start(Arc::clone(&self.login_api), self.auth_cookies.as_ref(),
+                   self.auth_credentials.as_ref(), input, &|_| Ok(()))
+            .await
+    }
+
+    pub async fn respond_login_session(&self, input: LoginSessionRespondInput) -> LoginSessionState {
+        self.login_session
+            .respond(input, self.auth_cookies.as_ref(), self.auth_credentials.as_ref())
+            .await
+    }
+
+    pub async fn cancel_login_session(&self, attempt_id: String) -> LoginSessionState {
+        self.login_session
+            .cancel(attempt_id, self.auth_cookies.as_ref(), &|_| Ok(()))
+            .await
+    }
+
+    pub async fn auto_login_start(&self, input: AutoLoginStartInput) -> Result<AutoLoginOutcome> { … }
+
+    pub async fn end_login_session(&self, request: LoginSessionEndRequest) -> Result<Option<SavedAuthSnapshot>> { … }
+
+    pub fn login_session_state(&self) -> LoginSessionState { self.login_session.state() }
+}
+```
+
+`transition` 参数传 `&|_| Ok(())`（`respond` 内部就是这么传的）。
+
+门面写好后，cloud 的 12 条 auth 命令就能照抄 —— 和 proxy 那批一样变成机械活。
+
+### 剩余未知
+
+- `TransitionSink` 的精确类型（grep 没找到定义，应是 type alias；看调用现场是 `&(dyn Fn(..) -> Result<()> + Send + Sync)`）
+- `AutoLoginOutcome` / `SavedAuthSnapshot` 的具体形状（返回值，可先用 `ok(...)` 直接序列化）
