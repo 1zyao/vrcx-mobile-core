@@ -96,6 +96,8 @@ async fn async_main() -> ExitCode {
     // Optional command bus: the same registry the phone uses, so a remote client can
     // drive this node over POST /api/invoke. Off unless a port is given, because it
     // exposes the node to anything that can reach loopback.
+    let bus_only = args.iter().any(|arg| arg == "--command-bus-only");
+
     let command_bus_port = args
         .iter()
         .position(|arg| arg == "--command-bus-port")
@@ -128,6 +130,24 @@ async fn async_main() -> ExitCode {
             }
         }
         None => state.set_event_sink(console_sink.clone()),
+    }
+
+    // Serve the bus without a backend runtime. A read-only query node does not need
+    // a live VRChat session, and this also makes the bus testable without credentials
+    // (the backend runtime aborts the process when no account is saved).
+    if bus_only {
+        if command_bus_port.is_none() {
+            report_headless_error(
+                Some(&app_data_dir.current_dir),
+                "headless:command-bus-only",
+                "--command-bus-only requires --command-bus-port <port>".to_string(),
+            );
+            return ExitCode::from(1);
+        }
+        println!("command bus only: backend runtime not started");
+        let _ = tokio::signal::ctrl_c().await;
+        shutdown_runtime(&state, "ctrl-c");
+        return ExitCode::SUCCESS;
     }
 
     match state.start_headless_backend_runtime(cli_login_prompt).await {
@@ -413,6 +433,7 @@ fn is_runtime_stopped_event(event: &str, payload: &Value) -> bool {
         .ok()
         .is_some_and(|telemetry| telemetry.kind == BackendRuntimeTelemetryKind::RuntimeStopped)
 }
+
 
 
 

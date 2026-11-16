@@ -1628,3 +1628,56 @@ headless login failed: No saved account is available…
 cargo check -p vrcx-0-headless                              EXIT=0
 cargo build -p vrcx-0-headless                              EXIT=0（31.8 MB）
 ```
+
+---
+
+## headless 命令总线：真请求验证通过（2026-11-17）
+
+加 `--command-bus-only`（只服务总线、不启动后端运行时），headless 就不再因为
+"没有已保存账号"而退出：
+
+```
+$ vrcx-0-headless --data-dir <dir> --command-bus-port 8897 --command-bus-only
+command bus listening on http://127.0.0.1:8897/api/invoke
+command bus only: backend runtime not started
+```
+
+三个真实请求：
+
+**1) 已知命令** → `HTTP 200`
+
+```json
+{"ok":true,"result":{"authenticatedRuntimePhase":{
+   "authScopeGeneration":0,"endpoint":"",
+   "favorites":{"attempt":0,"status":"pending"},
+   "friends":{"attempt":0,"status":"pending"},
+   "phase":"idle", ...}}}
+```
+
+**2) 未知命令** → 结构化错误
+
+```json
+{"error":{"code":"unsupported","message":"`app__nope` is not available on this transport"},"ok":false}
+```
+
+**3) feed 查询（真实 SQLite）** → `{"ok":true,"result":[]}`
+
+### 这意味着什么
+
+同一份 `CommandRegistry` 现在**同时服务两个宿主**：
+
+```
+手机  → mobile-core  → serve_loopback（随机端口，进程内）
+服务器 → headless     → serve_on(fixed port)（固定端口，可远程访问）
+```
+
+响应信封、错误码、命令名完全一致 —— 这正是目标第一条要的东西。
+而且 `--command-bus-only` 这个模式本身有用：一个只读查询节点不需要 VRChat 会话。
+
+### 验证对比
+
+| 项 | 之前 | 现在 |
+|---|---|---|
+编译 | ✅ | ✅ |
+端口绑定 | ✅ 日志证明 | ✅ |
+**实际请求** | ❌ 进程退出抢不到窗口 | ✅ 三个请求都有响应 |
