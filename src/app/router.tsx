@@ -21,6 +21,7 @@ import { useSidebarAutoHide } from '@/components/layout/useSidebarAutoHide';
 import { useTrayShortcut } from '@/components/layout/useTrayShortcut';
 import { WindowResizeHandles } from '@/components/layout/WindowResizeHandles';
 import { MOBILE_SCREENS } from '@/features/mobile/mobileRoutes';
+import { MobileHomePage } from '@/features/mobile/MobileHomePage';
 import { MobileScreenStub } from '@/features/mobile/MobileScreenStub';
 import { MobileShell } from '@/features/mobile/MobileShell';
 import { useIsMobile } from '@/lib/use-mobile';
@@ -322,9 +323,7 @@ function AppRouterContent() {
                                             key={screen.path}
                                             path={screen.path}
                                             element={
-                                                <MobileScreenStub
-                                                    screen={screen}
-                                                />
+                                                screen.path === 'home' ? (<MobileHomePage />) : (<MobileScreenStub screen={screen} />)
                                             }
                                         />
                                     ))}
@@ -353,3 +352,4 @@ export function AppRouter() {
         </HashRouter>
     );
 }
+

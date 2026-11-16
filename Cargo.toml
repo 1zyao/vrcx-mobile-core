@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "crates/command-server",
     "src-tauri",
     "crates/i18n",
     "crates/core",
@@ -160,3 +161,4 @@ lto = true
 opt-level = "s"
 panic = "abort"
 strip = true
+

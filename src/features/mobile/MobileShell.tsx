@@ -12,15 +12,15 @@ import { cn } from '@/lib/utils';
  * The screens themselves are ported one at a time; see `mobileRoutes.ts`.
  */
 const NAV_ITEMS = [
-    { to: '/m/home', icon: House, key: 'view.home.title', fallback: 'Home' },
+    { to: '/home', icon: House, key: 'view.home.title', fallback: 'Home' },
     {
-        to: '/m/favorites',
+        to: '/favorites',
         icon: Heart,
         key: 'view.favorites.title',
         fallback: 'Favorites'
     },
     {
-        to: '/m/inbox',
+        to: '/inbox',
         icon: Bell,
         key: 'view.notification.title',
         fallback: 'Inbox'
@@ -76,10 +76,10 @@ export function MobileShell() {
                         aria-label={t('view.search.title', {
                             defaultValue: 'Search'
                         })}
-                        onClick={() => navigate('/m/search')}
+                        onClick={() => navigate('/search')}
                         className={cn(
                             'border-border/50 bg-background/80 flex size-[3.5rem] shrink-0 items-center justify-center rounded-full border shadow-lg backdrop-blur-md',
-                            pathname.startsWith('/m/search')
+                            pathname.startsWith('/search')
                                 ? 'text-foreground'
                                 : 'text-muted-foreground'
                         )}
@@ -91,3 +91,4 @@ export function MobileShell() {
         </div>
     );
 }
+

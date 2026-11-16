@@ -9720,6 +9720,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "vrcx-0-command-server"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "futures-util",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "vrcx-0-composition"
 version = "0.1.0"
 dependencies = [
