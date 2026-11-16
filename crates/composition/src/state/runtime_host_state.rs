@@ -1031,5 +1031,22 @@ impl RuntimeHostState {
             )))
         }
     }
+
+    /// Metadata for a file, by id or by its full URL.
+    ///
+    /// Mirrors the desktop host's `file_metadata_get`: the URL is reduced to its file id, then the
+    /// file cache answers (it knows which ids it has already resolved). `None` means "not cached",
+    /// not "not found" - the caller decides whether to fetch.
+    pub async fn file_metadata_get(
+        &self,
+        file_url_or_id: String,
+    ) -> Option<vrcx_0_contracts::FileMetadataOutput> {
+        let file_id = vrcx_0_core::files::extract_file_id(&file_url_or_id)?;
+        let auth_scope = self.runtime_context.auth_scope.snapshot();
+        self.runtime_context
+            .file_cache()
+            .resolve(&auth_scope.endpoint, &file_id)
+            .await
+    }
 }
 

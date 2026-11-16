@@ -332,6 +332,44 @@ struct SearchGroupsInput {
     params: vrcx_0_contracts::vrchat_requests::GroupSearchParams,
 }
 
+/// Mirrors the facade's file analysis input.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct FileAnalysisArgs {
+    #[serde(default)]
+    file_id: String,
+    #[serde(default)]
+    version: i64,
+    #[serde(default)]
+    variant: String,
+}
+
+async fn app__vrchat_auth_file_analysis_get(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<FileAnalysisArgs>,
+) -> Result<serde_json::Value, CommandError> {
+    let input = args.input;
+    let response = state
+        .vrchat_remote()
+        .file_analysis(input.file_id, input.version, input.variant)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+/// Cloud reads `fileUrlOrId` as a bare top-level argument.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct FileMetadataGetArgs {
+    #[serde(default)]
+    file_url_or_id: String,
+}
+
+async fn app__file_metadata_get(
+    state: Arc<RuntimeHostState>,
+    args: FileMetadataGetArgs,
+) -> Result<Option<vrcx_0_contracts::FileMetadataOutput>, CommandError> {
+    Ok(state.file_metadata_get(args.file_url_or_id).await)
+}
 /// Mirrors cloud's `VrchatGroupUserGroupsInput`.
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -666,6 +704,16 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         "app__notification_list_query",
         app__notification_list_query,
     );
+    registry.register_typed::<InputArgs<FileAnalysisArgs>, serde_json::Value, _, _>(
+        "app__vrchat_auth_file_analysis_get",
+        app__vrchat_auth_file_analysis_get,
+    );
+    registry.register_typed::<
+        FileMetadataGetArgs,
+        Option<vrcx_0_contracts::FileMetadataOutput>,
+        _,
+        _,
+    >("app__file_metadata_get", app__file_metadata_get);
     registry.register_typed::<InputArgs<GroupUserGroupsInput>, serde_json::Value, _, _>(
         "app__vrchat_group_user_groups_get",
         app__vrchat_group_user_groups_get,
@@ -821,7 +869,7 @@ mod tests {
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 34);
+        assert_eq!(registry.len(), 36);
     }
 }
 
@@ -961,6 +1009,8 @@ async fn app__favorite_list(
     .map_err(|error| CommandError::failed(error.to_string()))?;
     Ok(rows)
 }
+
+
 
 
 
