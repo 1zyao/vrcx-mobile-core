@@ -732,3 +732,51 @@ return authApi.verify(verifyCode, authType).let { if (it.isSuccess) emitAuthed(p
 4. cookie 改读核心 snapshot
 5. 此时 authApi 只剩 verify 一处 → 换掉 → network/api/AuthApi 可删
 ```
+
+---
+
+## 双客户端真正切断：登录链路已无 VRCM 自己的 VRChat 请求（2026-11-17）
+
+关键发现：`AuthenticatedRuntimeSession` 自带完整用户 JSON。
+
+```rust
+pub struct AuthenticatedRuntimeSession {
+    pub user_id: String,
+    pub display_name: String,
+    pub endpoint: String,
+    pub websocket: String,
+    pub current_user: RawJson,      // ← 登录响应里就有，不需要再查
+}
+```
+
+所以不需要额外的 `current_user` 命令，也不用碰 `VrchatConfigRuntime` 的配置管道。
+
+### 改法
+
+```
+1. loginBasic 返回 CoreLogin(state, userJson)
+   —— userJson = session.currentUser
+2. AuthService.loginLocked: 把 userJson 存进 pendingCoreUserJson
+3. emitAuthed: pendingCoreUserJson 非空时直接反序列化成 CurrentUserData，
+   跳过 (response ?: authApi.userRes())
+4. finally 里清空 pendingCoreUserJson
+```
+
+### 效果
+
+| 环节 | 之前 | 现在 |
+|---|---|---|
+登录 POST | 核心 | 核心 |
+拉当前用户 | `authApi.userRes()` ❌ | 登录响应里的 `current_user` ✅ |
+
+登录链路里 VRCM 自己的 VRChat 请求已经没有了。
+
+### 仍是 VRCM 侧的
+
+- `cookiesStorage.cookieValue(AUTH_COOKIE)` —— AccountDto 里仍存 cookie（下一步换成核心 snapshot）
+- `verify()` 仍走 `authApi.verify`
+- `restoreAuth()` 仍走自己的恢复逻辑
+
+### 编译验证
+
+`:composeApp:compileGithubDebugKotlinAndroid` → BUILD SUCCESSFUL (33s)
