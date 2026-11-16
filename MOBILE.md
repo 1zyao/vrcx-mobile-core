@@ -957,3 +957,49 @@ cargo build --target <target> -p vrcx-0-mobile-core
 
 - [ ] 单独（无其他 cargo 进程）跑一次脚本，确认真能成功
 - [ ] 若仍失败，改用 `cmd /c` 包一层并捕获 stderr，看清真实错误
+
+---
+
+## `.so` 构建脚本已跑通（2026-11-17）
+
+```
+==> cargo build --target x86_64-linux-android
+-> x86_64/libvrcx_0_mobile.so (121.3 MB)
+==> cargo build --target aarch64-linux-android
+-> arm64-v8a/libvrcx_0_mobile.so (110.3 MB)
+```
+
+### 根因：clang wrapper 少了 API level 后缀
+
+NDK 的 `bin/` 里同时存在：
+
+```
+x86_64-linux-android-clang.cmd        ← 通用 wrapper，链接时报 exit 1
+x86_64-linux-android24-clang.cmd      ← 带 API level，正确
+```
+
+之前手工命令用的是 `24` 那个，脚本里写漏了。**Gradle 那次的 101 很可能也是同一个原因**
+（`$target-clang.cmd`），当时因为看不到 cargo 的 stderr 才误判成"环境差异"。
+
+教训：**捕获 stderr**。这次改成 `cmd /c "cargo ... > log 2>&1"` 之后，
+链接器的真实错误一行就出来了，之前 PowerShell 直接 `& cargo` 把它吞掉了。
+
+### 脚本
+
+```
+scripts/build-core.ps1  (VRCM 仓库)
+  -Abi x86_64 | arm64-v8a | all     默认 all
+  -ApiLevel 24                      默认 24
+  -CoreRepo <vrcx0/mobile>
+  -Ndk $env:ANDROID_NDK_HOME
+  -Msvc <MSVC bin>
+```
+
+失败时会打印 cargo 日志里的 error 行并给出日志路径。
+
+### 现在的构建流程
+
+```
+1. scripts/build-core.ps1          # 改过 Rust 之后
+2. gradlew :composeApp:installGithubDebug
+```
