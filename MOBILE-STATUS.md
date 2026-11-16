@@ -156,3 +156,42 @@ c6ed9f2  feat: transport all VRChat traffic through the core
 3. 事件接进 VRCM 的 store（登录后才有事件可接）
 4. `network/` 清理：删 Api 类，只留 DTO 与路径常量
 5. 移除 `app__debug_emit_event`，补 `HttpTimeout` 之外的引擎 capability
+
+---
+
+## 追加（2026-11-17 晚，第 75 轮）
+
+### 运行时证据：restoreAuth 的核心分支在真机上执行
+
+```
+I System.out: [VrcxCore] restore -> Unauthorized hasUser=false
+```
+
+证明三件事：`println` 在 Android 上确实进 logcat；`restoreAuth` 走的是
+`app__vrchat_auth_auto_login_start`；`AutoLoginOutcome → AuthState` 映射在无凭据时
+正确落到 `Unauthorized`。
+
+### 但引擎路径仍未观测到
+
+logcat 里没有 `[VrcxCore] proxy ...` 行 —— VRCM 在登录前不发任何请求。
+
+### 尝试用 adb 自动登录：失败
+
+想用假账号证明引擎路径（`POST auth/user` 会打出 proxy 行），试了两轮：
+
+```
+adb shell input tap 540 1193     # 点用户名框
+adb shell input text "probeuser"
+```
+
+结果字段仍是占位符，`dumpsys input_method` 显示：
+
+```
+mInputShown=false
+mServedView=DecorView{...}[MainActivity]     ← 焦点停在窗口而非输入框
+```
+
+两次截图的 sha256 完全一致（连状态栏时钟都没变），说明屏幕完全没响应输入。
+
+**结论：Compose 的文本框无法用 `adb shell input` 驱动（至少在这个构建里）。**
+所以登录验证必须人工点击，这也解释了我此前一直无法自行完成这一格验证。
