@@ -657,6 +657,9 @@ pub struct SyncConnectionFields {
     /// Sync cadence in seconds (0 = default 60).
     #[serde(default)]
     pub interval_seconds: i64,
+    /// Collector election priority (higher records live feed first, 0-100).
+    #[serde(default)]
+    pub collector_priority: i64,
 }
 
 /// Per-table ops moved by the most recent completed cycle, so the status

@@ -94,6 +94,10 @@ impl RemoteSyncHost {
             tls_verify: settings.tls_verify,
             allow_plaintext: settings.allow_plaintext,
             has_password: !settings.password.is_empty(),
+            collector_priority: read_i64(
+                crate::state::remote_sync::collector_election::CONFIG_COLLECTOR_PRIORITY,
+                0,
+            ),
             interval_seconds: read_i64(
                 vrcx_0_application_sync::CONFIG_INTERVAL_SEC,
                 vrcx_0_application_sync::DEFAULT_INTERVAL_SEC as i64,

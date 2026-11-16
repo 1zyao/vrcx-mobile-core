@@ -11,6 +11,7 @@ export interface SyncConfigureInput {
     enabled?: boolean;
     connection?: SyncConnectionInput;
     intervalSec?: number;
+    collectorPriority?: number;
 }
 
 export async function fetchSyncStatus(): Promise<SyncStatusSnapshot> {
@@ -31,7 +32,8 @@ export async function configureSync(
     return commands.syncConfigure(
         input.enabled ?? null,
         input.connection ?? null,
-        input.intervalSec ?? null
+        input.intervalSec ?? null,
+        input.collectorPriority ?? null
     );
 }
 

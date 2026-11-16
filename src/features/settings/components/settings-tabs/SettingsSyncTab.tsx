@@ -88,6 +88,7 @@ export function SettingsSyncTab() {
     const [tlsVerify, setTlsVerify] = useState(false);
     const [allowPlaintext, setAllowPlaintext] = useState(true);
     const [intervalSec, setIntervalSec] = useState('60');
+    const [collectorPriority, setCollectorPriority] = useState('0');
     const [enabled, setEnabled] = useState(false);
     const [testing, setTesting] = useState(false);
     const [testResult, setTestResult] =
@@ -161,6 +162,7 @@ export function SettingsSyncTab() {
                 setTlsVerify(fields.tlsVerify);
                 setAllowPlaintext(fields.allowPlaintext);
                 setHasPassword(fields.hasPassword);
+                setCollectorPriority((fields.collectorPriority ?? 0).toString());
                 if ((fields.intervalSeconds ?? 0) > 0) {
                     setIntervalSec(String(fields.intervalSeconds));
                 }
@@ -249,7 +251,9 @@ export function SettingsSyncTab() {
                     tlsVerify,
                     allowPlaintext
                 },
-                intervalSec: Number.parseInt(intervalSec, 10) || undefined
+                intervalSec: Number.parseInt(intervalSec, 10) || undefined,
+                collectorPriority:
+                    Number.parseInt(collectorPriority, 10) || 0
             });
             setStatus(snapshot);
             setEnabled(snapshot.enabled);
@@ -297,7 +301,7 @@ export function SettingsSyncTab() {
 
     // Election rank advertised by each device; mirrors
     // `collector_election::effective_priority` (legacy `forced` == 1000).
-    const collectorPriority = (device: { role?: string; priority?: number }) =>
+    const collectorRank = (device: { role?: string; priority?: number }) =>
         device.role === 'forced' && !device.priority
             ? 1000
             : (device.priority ?? 0);
@@ -319,7 +323,7 @@ export function SettingsSyncTab() {
             if (onlineDevices.length === 0) return [];
             const ranked = [...onlineDevices].sort(
                 (a, b) =>
-                    collectorPriority(b) - collectorPriority(a) ||
+                    collectorRank(b) - collectorRank(a) ||
                     a.deviceId.localeCompare(b.deviceId)
             );
             return ranked[0] ? [ranked[0].deviceId] : [];
@@ -461,6 +465,43 @@ export function SettingsSyncTab() {
                                     'view.settings.sync.connection.interval_unit'
                                 )}
                             </span>
+                        </div>
+                    </Field>
+                    <Field
+                        label={t(
+                            'view.settings.sync.connection.priority_label'
+                        )}
+                        description={t(
+                            'view.settings.sync.connection.priority_hint'
+                        )}
+                    >
+                        <div className="flex items-center justify-end gap-2">
+                            <Input
+                                value={collectorPriority}
+                                onChange={(event) =>
+                                    // digits only, at most 3 chars
+                                    setCollectorPriority(
+                                        event.target.value
+                                            .replace(/[^0-9]/g, '')
+                                            .slice(0, 3)
+                                    )
+                                }
+                                onBlur={() =>
+                                    setCollectorPriority((current) => {
+                                        const parsed =
+                                            Number.parseInt(current, 10);
+                                        if (!Number.isFinite(parsed)) {
+                                            return '0';
+                                        }
+                                        return Math.min(
+                                            100,
+                                            Math.max(0, parsed)
+                                        ).toString();
+                                    })
+                                }
+                                inputMode="numeric"
+                                className="w-20"
+                            />
                         </div>
                     </Field>
                 </div>
@@ -791,7 +832,7 @@ export function SettingsSyncTab() {
                                                 {device.role ? (
                                                     <span className="text-muted-foreground shrink-0 font-mono text-[10px] uppercase">
                                                         {device.role} ·P
-                                                        {collectorPriority(device)}
+                                                        {collectorRank(device)}
                                                     </span>
                                                 ) : null}
                                                 <span className="ml-auto flex shrink-0 items-center gap-3">
