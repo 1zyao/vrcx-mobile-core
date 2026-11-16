@@ -3291,6 +3291,8 @@
                     "testing": "Testing…",
                     "privacy_note": "Sync only shares data between devices you connect to your own database. Passwords and login credentials never leave this device.",
                     "interval_unit": "seconds",
+                    "priority_label": "Collector priority",
+                    "priority_hint": "Higher numbers record live feed first (0-100). Suggested: main desktop 20, second desktop 10, 24/7 server 0 - the server only records while every desktop is off.",
                     "test_failed_short": "Connection failed — hover for details"
                 },
                 "enable_toast": "Remote sync enabled",

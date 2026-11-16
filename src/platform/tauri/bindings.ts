@@ -701,12 +701,14 @@ export const commands = {
     syncConfigure: (
         enabled: boolean | null,
         connection: SyncConnectionInput | null,
-        intervalSec: number | null
+        intervalSec: number | null,
+        collectorPriority: number | null
     ) =>
         __TAURI_INVOKE<SyncStatusSnapshot>('sync__configure', {
             enabled,
             connection,
-            intervalSec
+            intervalSec,
+            collectorPriority
         }),
     /**  Stored connection fields without the password value. */
     syncGetConnection: () =>
@@ -7707,6 +7709,8 @@ export type SyncConnectionFields = {
     hasPassword: boolean;
     /**  Sync cadence in seconds (0 = default 60). */
     intervalSeconds?: number;
+    /**  Collector election priority (higher records live feed first, 0-100). */
+    collectorPriority?: number;
 };
 
 /**
