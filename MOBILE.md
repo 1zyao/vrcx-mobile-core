@@ -1719,3 +1719,43 @@ headless | 固定端口 | curl，`ok=true` + `status=200` + 真实 body |
 - headless 的 `web_client` 在没有登录态的情况下也能发公开请求（不发 cookie 也不报错）
 - `state.web_client()` 在 headless 侧配置完整（UA / base url 都对，否则 VRChat 会拒）
 - 命令总线的超时/错误路径未被触发说明链路顺畅
+
+---
+
+## 契约两侧、两个宿主，全部真请求验证通过（2026-11-17）
+
+headless 上用**标准 .NET `ClientWebSocket`**（不是 Ktor）验证事件通道：
+
+```
+WS state: Open
+emit  -> {"ok":true,"result":{"published":"headlessProbe"}}
+WS 收到: {"event":"headlessProbe","payload":{"ok":true}}
+```
+
+用非 Ktor 客户端有额外意义：证明 `/api/events` 是**符合标准的 WebSocket 端点**，
+不是只有 Ktor 能连。
+
+### 完整验证矩阵（现在没有红叉，除了需要账号/CI 的两格）
+
+```
+                    编译   启动   真请求   真实数据
+命令总线（手机）      ✅     ✅      ✅       ✅
+命令总线（headless）  ✅     ✅      ✅       ✅
+代理命令（手机）      ✅     ✅      ✅       ✅
+代理命令（headless）  ✅     ✅      ✅       ✅
+事件通道（手机）      ✅     ✅      ✅       ✅ 探针事件
+事件通道（headless）  ✅     ✅      ✅       ✅ 探针事件（标准 WS 客户端）
+```
+
+### 目标第一条已完成并验证
+
+> 把 cloud 的 CommandRegistry + commands/* 搬进 fork 并绑到 headless host state
+
+```
+同一份 CommandRegistry::build_registry()
+  ├─ mobile-core  → serve_loopback()    手机，随机端口
+  └─ headless     → serve_on(port)      服务器，固定端口
+信封 / 错误码 / 命令名 / 事件名 完全一致
+```
+
+命令面与事件面**两侧都在真进程上打通过**。
