@@ -34,5 +34,12 @@ vrcx-0-core = { path = "../core" }
 vrcx-0-contracts = { path = "../contracts" }
 cookie_store = "0.22.1"
 
+# reqwest 0.13 pins rustls-platform-verifier, which on Android/iOS only works
+# after an explicit JNI/ObjC init. On those targets we hand reqwest our own
+# webpki-roots rustls config instead (see web_client.rs).
+[target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
+rustls = { workspace = true }
+webpki-roots = { workspace = true }
+
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt", "time"] }

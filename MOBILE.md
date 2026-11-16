@@ -51,18 +51,14 @@ vrchat_launch_pipe          screenshot_cache（Android 有限、iOS 基本不行
 
 ### 待做
 
-- [ ] **reqwest 的 HTTPS 根证书（`rustls-platform-verifier`）**
-      reqwest 0.13.5 把 `rustls-platform-verifier` 写死了，**没有** `rustls-tls-webpki-roots` 这个 feature。
-      而它在 Android 上必须调用 `rustls_platform_verifier::android::init_with_env` /
-      `init_with_runtime`（要 JNI `Env` + Android `Context`），否则证书校验直接失败。
-      两条路：
-      1. 从 Rust 导出 `android_init` JNI 函数，由 `tauri android init` 生成的 `MainActivity.kt` 调用（正规做法）
-      2. 用 `rustls-no-provider` + `use_preconfigured_tls(...)` 塞一个 webpki-roots 的
-         `ClientConfig` 进 reqwest builder（纯 Rust，和 `remote_sync_postgres.rs` 现有写法一致）
-
-      注意：`vrchat-client` 和 `integrations` 都建了 reqwest client，改动点不止一处。
-
-      **这一项不做，APK 能装上、UI 能显示，但登录 VRChat REST API 会全部 TLS 失败。**
+- [x] **reqwest 的 HTTPS 根证书** —— 用 `use_preconfigured_tls` 塞 webpki-roots 的 `ClientConfig`
+      reqwest 0.13.5 把 `rustls-platform-verifier` 写死了，没有 `rustls-tls-webpki-roots` 这个 feature；
+      而 platform-verifier 在 Android 上必须先 `init_with_env` / `init_with_runtime`
+      （要 JNI `Env` + Android `Context`），否则证书校验直接失败。
+      选了纯 Rust 的方案：在 `vrchat-client/src/web_client.rs` 唯一的 `Client::builder()` 处
+      （`fn ... jar, proxy_url, user_agent, follow_redirects`）按 target 注入
+      webpki-roots 的 `rustls::ClientConfig`，和 `remote_sync_postgres.rs` 现有写法一致。
+      实际只有一个构造点，`outbound-adapters::web_client` 是转调它，所以 `integrations` 也一起修好了。
 - [x] **`secrets_key`**：移动端不再返回 `None`（`9e7da1790` 之后的提交）
       桌面走 `machine_uid` 派生不变；Android/iOS 改为**首跑生成 32 字节随机 key**，
       写到应用私有目录的 `secrets.key`（unix `0600`）。该目录本身由应用 UID 独占，

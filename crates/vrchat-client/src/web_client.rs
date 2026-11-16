@@ -224,9 +224,31 @@ fn build_http_client_with_redirects(
         );
     }
 
+    // reqwest 0.13 hardwires `rustls-platform-verifier`, and on Android/iOS it
+    // refuses to verify anything until the app hands it a JNI `Env` + Android
+    // `Context` (or the ObjC equivalent) through `init_with_env` /
+    // `init_with_runtime`. Without that every HTTPS request fails, so on those
+    // targets we supply a plain webpki-roots config instead — same shape as the
+    // remote-sync Postgres connector, which already avoids native roots.
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    {
+        builder = builder.use_preconfigured_tls(mobile_tls_client_config());
+    }
+
     builder
         .build()
         .map_err(|e| Error::Custom(format!("http client: {e}")))
+}
+
+#[cfg(any(target_os = "android", target_os = "ios"))]
+fn mobile_tls_client_config() -> rustls::ClientConfig {
+    let provider = std::sync::Arc::new(rustls::crypto::ring::default_provider());
+    let builder = rustls::ClientConfig::builder_with_provider(provider)
+        .with_safe_default_protocol_versions()
+        .expect("rustls default protocol versions must be supported");
+    let mut roots = rustls::RootCertStore::empty();
+    roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+    builder.with_root_certificates(roots).with_no_client_auth()
 }
 
 fn normalize_execute_result(result: Result<(i32, String)>) -> Result<(i32, String)> {
