@@ -204,3 +204,85 @@ avatarName                   →   currentValue（Avatar 类）
 这份数据来自**桌面端自己的库**，不是 remoteSync 把它们同步到后端的结果。
 所以「后端作为同步消费者」这条链路**仍未被验证** —— 它和「读模型可用」是两件事。
 新目标第（2）条的验收，需要后端有经同步得来的数据才能成立。
+
+---
+
+# 第 2 轮：VRCM 作为独立后端的纯前端（拓扑基础验证）
+
+## 做了什么
+
+**1. 可配置后端地址（`VrcxBackend`）**
+
+```kotlin
+object VrcxBackend {
+    @Volatile var baseUrlOverride: String? = null   // 例如 http://192.168.31.84:8891
+    val isRemote: Boolean
+}
+```
+
+`vrcxCoreClient()` 的 Android actual 现在：
+
+```kotlin
+VrcxBackend.baseUrlOverride?.let { return VrcxCoreClient(it, token = "") }   // 远端后端优先
+return requireNotNull(endpoint) { "no VRCX backend configured …" }
+```
+
+配了地址 → 进程内核心完全不参与。这正是目标 (1) 要求的形态。
+
+**2. `feedQuery(...)`** —— 语义命令的客户端封装
+
+```kotlin
+suspend fun VrcxCoreClient.feedQuery(
+    userId: String, mode: String = "lookup",
+    maxEntries: Int = 60, search: String = "", cursor: String? = null
+): JsonElement
+```
+
+## 拓扑验证（关键证据）
+
+在主机上跑独立后端：
+
+```
+vrcx-0-headless --data-dir <真实库副本> --command-bus-port 8891 --command-bus-only
+```
+
+- 主机本机：`POST /api/invoke` → **200**
+- 模拟器 `ping 10.0.2.2` → 通（0.597 ms）
+- 模拟器 `busybox wget --post-data` → **拿到真实响应**：
+
+```json
+{"ok":true,"result":{"authenticatedRuntimePhase":{"authScopeGeneration":0,
+ "endpoint":"","favorites":{"status":"pending"},"friends":{"status":"pending"},
+ "phase":"idle",...}}}
+```
+
+也就是说：
+
+```
+MuMu 模拟器 ──HTTP──> 10.0.2.2:8891 ──> 主机上的独立 VRCX 后端 ──> CommandRegistry
+```
+
+**手机端不需要进程内核心**。目标 (1) 的拓扑成立了。
+
+## 编译
+
+```
+:composeApp:compileGithubDebugKotlinAndroid   BUILD SUCCESSFUL (27s)
+```
+
+## 下一轮
+
+```
+1. FriendActivityTimelineSource 的 Backend 实现
+   —— 需要 FriendActivityTimelineCursor 的字段与 AccountSessionToken 的构造方式
+2. 接进 FriendActivityTimelineModel（页面不动）
+3. 后端地址来源：先读 files/backend.url（调试用），后续做设置页
+4. 真机看到动态
+```
+
+## 诚实标注
+
+- ✅ 拓扑：手机 → 独立后端（已验证，真请求）
+- ✅ 读模型：`app__feed_rows_query` 返回真实行（第 1 轮验证）
+- ❌ 同步：后端持有的是**桌面库的副本**，不是 remoteSync 同步来的
+- ❌ UI：`FriendActivityTimelineSource` 的 Backend 实现还没写，页面上还看不到
