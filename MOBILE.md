@@ -536,3 +536,46 @@ impl RuntimeHostContext {
 
 - `TransitionSink` 的精确类型（grep 没找到定义，应是 type alias；看调用现场是 `&(dyn Fn(..) -> Result<()> + Send + Sync)`）
 - `AutoLoginOutcome` / `SavedAuthSnapshot` 的具体形状（返回值，可先用 `ok(...)` 直接序列化）
+
+---
+
+## VRCM 登录接入的前置（2026-11-17）
+
+### AuthService 是具体类，20+ 文件依赖
+
+```
+service/AuthService.kt:68   class AuthService(...)      ← 不是 interface
+13 个公开方法：
+  beginAccountLogin / restoreAuth / currentUser / verify / login / logout
+  accountDto / accountDtoList / accountDtoOrNull / doReTryAuth
+  applySocketUserLocation / applyOwnProfileRefresh / applySocketUserUpdate
+依赖它的文件 20+ 个（几乎全部 presentation 域 + di 模块）
+```
+
+**所以不能"换实现"，只能换它的内部、保持签名不变。** 这正好符合"页面不动，只换数据层"。
+
+### 核心客户端共享入口（已加）
+
+```kotlin
+// commonMain
+expect fun vrcxCoreClient(): VrcxCoreClient
+expect fun isVrcxCoreReady(): Boolean
+
+// androidMain：幂等启动，第一次调用者赢，后来者复用同一 endpoint
+fun startVrcxCore(filesDir: String): VrcxCoreClient?
+```
+
+现在任何 service 都能 `vrcxCoreClient()` 拿到客户端，不必自己解析 port/token。
+`:composeApp:compileGithubDebugKotlinAndroid` → BUILD SUCCESSFUL (36s)。
+
+### AuthService 改造还缺的命令
+
+| AuthService 方法 | 需要的核心命令 | 状态 |
+|---|---|---|
+`login()` | `app__vrchat_auth_session_start` | ✅ 已注册 |
+`verify()` | `app__vrchat_auth_session_respond` | ✅ 已注册 |
+`currentUser()` | `app__vrchat_auth_current_user_get` | ⬜ 未注册 |
+`logout()` | `app__vrchat_auth_session_end` | ⬜ 未注册 |
+`restoreAuth()` | `app__vrchat_auth_saved_snapshot_get` | ⬜ 未注册 |
+
+所以下一步：把这 3 条注册进 mobile-host，再改 AuthService 的内部。
