@@ -10,14 +10,24 @@ export type MobileFeedTone =
     | 'unknown';
 
 export type MobileFeedPresentation = {
-    /** Short event label rendered as the card's chip. */
-    label: string;
-    /** Main line of the card. */
-    primary: string;
+    /**
+     * Feed event type. The label is translated by the caller through the same
+     * key the desktop table uses: `view.feed.filters.<type>`.
+     */
+    typeKey: string;
+    /**
+     * Translation key for a fallback line, used when the row carries no
+     * human-readable text of its own (uncached world, etc).
+     */
+    primaryKey?: string;
+    /** Row-derived text: names, statuses and bios are shown verbatim. */
+    primary?: string;
     /** Optional supporting line. */
     secondary?: string;
     tone: MobileFeedTone;
 };
+
+const UNKNOWN_WORLD_KEY = 'dashboard.widget.unknown_world';
 
 function firstNonEmpty(...values: Array<string | null | undefined>) {
     for (const value of values) {
@@ -30,65 +40,94 @@ function firstNonEmpty(...values: Array<string | null | undefined>) {
 }
 
 /**
- * Maps a feed row onto the two lines a phone-sized card can show.
- *
- * The desktop table can display a dozen columns; a card cannot. Everything that
- * does not fit on `primary` / `secondary` is intentionally dropped rather than
- * truncated into noise.
+ * `location` falls back to either a raw VRChat identifier (`wrld_…:instance`,
+ * `grp_…`) or a travel token such as `private`/`offline` whenever the world is
+ * not in the local cache. Neither belongs on a card: ids are unreadable and the
+ * tokens have no translation key, so they are dropped and the caller shows the
+ * translated stand-in instead.
  */
+const LOCATION_TOKENS = new Set(['private', 'offline', 'traveling', '']);
+
+function readableLocation(value: string | null | undefined) {
+    const trimmed = value?.trim() ?? '';
+    if (!trimmed) {
+        return '';
+    }
+    if (
+        trimmed.startsWith('wrld_') ||
+        trimmed.startsWith('grp_') ||
+        LOCATION_TOKENS.has(trimmed.toLowerCase())
+    ) {
+        return '';
+    }
+    return trimmed;
+}
+
+function readableGroupName(value: string | null | undefined) {
+    const trimmed = value?.trim() ?? '';
+    if (!trimmed || trimmed.startsWith('grp_') || trimmed.startsWith('wrld_')) {
+        return '';
+    }
+    return trimmed;
+}
+
 export function describeMobileFeedRow(
     row: FeedRowOutput
 ): MobileFeedPresentation {
     const status = firstNonEmpty(row.status, row.previousStatus);
-    const location = firstNonEmpty(row.worldName, row.location);
+    const location = readableLocation(
+        firstNonEmpty(row.worldName, row.location)
+    );
+    const typeKey = firstNonEmpty(row.type) || 'GPS';
 
     switch (row.type) {
         case 'Online':
             return {
-                label: '上线',
-                primary: status || '在线',
+                typeKey,
+                primary: status,
                 secondary: firstNonEmpty(row.statusDescription) || undefined,
                 tone: 'online'
             };
         case 'Offline':
             return {
-                label: '下线',
-                primary: '离线',
-                secondary: location || undefined,
+                typeKey,
+                primary: location,
+                primaryKey: location ? undefined : UNKNOWN_WORLD_KEY,
                 tone: 'offline'
             };
         case 'GPS':
             return {
-                label: '移动',
-                primary: location || '未知位置',
-                secondary: firstNonEmpty(row.groupName) || undefined,
+                typeKey,
+                primary: location,
+                primaryKey: location ? undefined : UNKNOWN_WORLD_KEY,
+                secondary: readableGroupName(row.groupName) || undefined,
                 tone: 'move'
             };
         case 'Status':
             return {
-                label: '状态',
-                primary: status || '状态变更',
+                typeKey,
+                primary: status,
                 secondary: firstNonEmpty(row.statusDescription) || undefined,
                 tone: 'status'
             };
         case 'Bio':
             return {
-                label: '简介',
-                primary: firstNonEmpty(row.bio) || '简介变更',
+                typeKey,
+                primary: firstNonEmpty(row.bio),
                 tone: 'bio'
             };
         case 'Avatar':
-            // The row's owner id is a raw `usr_…` identifier; showing it on a
-            // card is noise, and the avatar name is the only meaningful part.
+            // The row's owner id is a raw `usr_…` identifier; only the avatar
+            // name is meaningful on a card.
             return {
-                label: '换头像',
-                primary: firstNonEmpty(row.avatarName) || '更换了头像',
+                typeKey,
+                primary: firstNonEmpty(row.avatarName),
                 tone: 'avatar'
             };
         default:
             return {
-                label: firstNonEmpty(row.type) || '事件',
-                primary: location || status || '—',
+                typeKey,
+                primary: location || status,
                 tone: 'unknown'
             };
     }
@@ -102,42 +141,44 @@ function pad(value: number) {
     return String(value).padStart(2, '0');
 }
 
-/**
- * Compact relative timestamp for cards ("3 分钟前", "昨天 21:04", "03-14 12:30").
- *
- * Accepts the raw `created_at` text from the read model. Timestamps without an
- * explicit zone are treated as local time, matching how the desktop renders
- * them; if the backend ever starts emitting UTC without a marker this will be
- * off by the local offset.
- */
-export function formatMobileFeedTime(
-    createdAt: string | null | undefined,
-    now: number = Date.now()
-): string {
+/** Parses the read model's `created_at`, which may use a space separator. */
+export function parseFeedTimestamp(createdAt: string | null | undefined) {
     const trimmed = createdAt?.trim();
     if (!trimmed) {
-        return '';
+        return null;
     }
-    const parsed = new Date(trimmed.includes('T') ? trimmed : trimmed.replace(' ', 'T'));
-    const time = parsed.getTime();
-    if (Number.isNaN(time)) {
-        return trimmed;
-    }
+    const parsed = new Date(
+        trimmed.includes('T') ? trimmed : trimmed.replace(' ', 'T')
+    );
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
 
-    const delta = now - time;
+export type MobileFeedTimeUnit = 'now' | 'minute' | 'hour' | 'clock';
+
+/**
+ * Relative time for a card. Returns a unit plus a count so the caller can
+ * translate it; only the clock form ("03-14 12:30") is preformatted.
+ */
+export function mobileFeedTimeParts(
+    createdAt: string | null | undefined,
+    now: number = Date.now()
+): { unit: MobileFeedTimeUnit; count?: number; clock?: string } | null {
+    const parsed = parseFeedTimestamp(createdAt);
+    if (!parsed) {
+        return null;
+    }
+    const delta = now - parsed.getTime();
     if (delta < MINUTE) {
-        return '刚刚';
+        return { unit: 'now' };
     }
     if (delta < HOUR) {
-        return `${Math.floor(delta / MINUTE)} 分钟前`;
+        return { unit: 'minute', count: Math.floor(delta / MINUTE) };
     }
     if (delta < DAY) {
-        return `${Math.floor(delta / HOUR)} 小时前`;
+        return { unit: 'hour', count: Math.floor(delta / HOUR) };
     }
-
-    const clock = `${pad(parsed.getHours())}:${pad(parsed.getMinutes())}`;
-    if (delta < 2 * DAY) {
-        return `昨天 ${clock}`;
-    }
-    return `${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())} ${clock}`;
+    return {
+        unit: 'clock',
+        clock: `${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())} ${pad(parsed.getHours())}:${pad(parsed.getMinutes())}`
+    };
 }

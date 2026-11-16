@@ -1,46 +1,54 @@
 import {
-    Bell,
+    MapPin,
     Newspaper,
     Search,
     Settings,
     Users,
     type LucideIcon
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 
 import { cn } from '@/lib/utils';
 
 type MobileTab = {
     to: string;
-    label: string;
+    /** Same keys the desktop route table uses for these page titles. */
+    labelKey: string;
     icon: LucideIcon;
 };
 
 /**
- * Primary destinations, following the layout VRCM 1.1.4 converged on for phones:
- * three destinations in a floating pill bar plus a separate circular search
- * button. Settings and the account live behind the top bar, not in a fourth tab.
+ * Destinations and their order mirror the pager list VRCM 1.1.3 ships with:
+ *
+ *     FriendLocation → FriendList → Search → Feed
+ *
+ * The first three are VRCM's own; the feed is the single page VRCX adds (in
+ * 1.1.3 it was a fourth pager). Nothing else is invented here.
  */
 const MOBILE_TABS: MobileTab[] = [
-    { to: '/m/feed', label: '动态', icon: Newspaper },
-    { to: '/m/friends', label: '好友', icon: Users },
-    { to: '/m/notifications', label: '通知', icon: Bell }
+    {
+        to: '/m/locations',
+        labelKey: 'app.routes.friend_locations',
+        icon: MapPin
+    },
+    { to: '/m/friends', labelKey: 'app.routes.friends', icon: Users },
+    { to: '/m/search', labelKey: 'app.routes.search', icon: Search },
+    { to: '/m/feed', labelKey: 'app.routes.feed', icon: Newspaper }
 ];
 
-function currentTitle(pathname: string) {
-    if (pathname.startsWith('/m/search')) {
-        return '搜索';
-    }
+function currentTitleKey(pathname: string) {
     if (pathname.startsWith('/m/me')) {
-        return '我的';
+        return null;
     }
-    const match = MOBILE_TABS.find((tab) => pathname.startsWith(tab.to));
-    return match?.label ?? 'VRCX-0';
+    return MOBILE_TABS.find((tab) => pathname.startsWith(tab.to))?.labelKey;
 }
 
 export function MobileShell() {
+    const { t } = useTranslation();
     const { pathname } = useLocation();
     const navigate = useNavigate();
+    const titleKey = currentTitleKey(pathname);
 
     return (
         <div className="bg-background flex h-full min-h-0 w-full flex-col overflow-hidden">
@@ -48,17 +56,17 @@ export function MobileShell() {
                 inside Tauri's Android WebView (Android 15 forces edge-to-edge
                 for targetSdk 35+ but the inset is not exposed to CSS), so a
                 minimum is applied as well. */}
-            <header className="border-border/60 flex h-[calc(3rem+max(env(safe-area-inset-top),1.75rem))] shrink-0 items-end gap-2 border-b px-4 pt-[max(env(safe-area-inset-top),1.75rem)] pb-2">
-                <h1 className="truncate text-sm font-semibold">
-                    {currentTitle(pathname)}
+            <header className="bg-background/85 flex h-[calc(3rem+max(env(safe-area-inset-top),1.75rem))] shrink-0 items-end gap-2 px-4 pt-[max(env(safe-area-inset-top),1.75rem)] pb-2 backdrop-blur-sm">
+                <h1 className="truncate text-[17px] leading-6 font-semibold tracking-tight">
+                    {titleKey ? t(titleKey) : 'VRCX-0'}
                 </h1>
                 <button
                     type="button"
-                    aria-label="我的"
+                    aria-label={t('app.routes.settings')}
                     onClick={() => navigate('/m/me')}
-                    className="text-muted-foreground hover:text-foreground active:text-foreground ml-auto flex size-9 items-center justify-center rounded-full"
+                    className="text-muted-foreground active:text-foreground -mr-2 ml-auto flex size-9 items-center justify-center rounded-full"
                 >
-                    <Settings className="size-5" />
+                    <Settings className="size-[18px]" />
                 </button>
             </header>
 
@@ -71,11 +79,11 @@ export function MobileShell() {
              * system gesture area, so the content scrolls behind it the way
              * VRCM's glass tab bar does.
              */}
-            <div className="pointer-events-none relative z-40 shrink-0">
-                <div className="pointer-events-auto mx-4 mb-[max(0.75rem,env(safe-area-inset-bottom))] flex items-center gap-2.5">
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-40">
+                <div className="pointer-events-auto mx-4 mb-[max(0.875rem,env(safe-area-inset-bottom))] flex items-center">
                     <nav
                         aria-label="主导航"
-                        className="border-border/60 bg-background/85 flex flex-1 items-center gap-1 rounded-full border p-1 shadow-lg backdrop-blur"
+                        className="border-border/50 bg-background/80 flex flex-1 items-center rounded-full border p-1.5 shadow-lg backdrop-blur-md"
                     >
                         {MOBILE_TABS.map((tab) => {
                             const Icon = tab.icon;
@@ -85,35 +93,21 @@ export function MobileShell() {
                                     to={tab.to}
                                     className={({ isActive }) =>
                                         cn(
-                                            'flex h-11 flex-1 items-center justify-center gap-1.5 rounded-full text-xs transition-colors',
+                                            'flex h-10 flex-1 items-center justify-center gap-1.5 rounded-full text-[12px] transition-colors',
                                             isActive
-                                                ? 'bg-foreground/10 text-foreground font-medium'
+                                                ? 'bg-foreground/8 text-foreground font-semibold'
                                                 : 'text-muted-foreground'
                                         )
                                     }
                                 >
-                                    <Icon className="size-5" />
+                                    <Icon className="size-[18px]" />
                                     <span className="truncate">
-                                        {tab.label}
+                                        {t(tab.labelKey)}
                                     </span>
                                 </NavLink>
                             );
                         })}
                     </nav>
-                    <NavLink
-                        to="/m/search"
-                        aria-label="搜索"
-                        className={({ isActive }) =>
-                            cn(
-                                'border-border/60 bg-background/85 flex size-12 shrink-0 items-center justify-center rounded-full border shadow-lg backdrop-blur',
-                                isActive
-                                    ? 'text-foreground'
-                                    : 'text-muted-foreground'
-                            )
-                        }
-                    >
-                        <Search className="size-5" />
-                    </NavLink>
                 </div>
             </div>
         </div>

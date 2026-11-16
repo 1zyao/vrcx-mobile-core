@@ -322,6 +322,15 @@ function AppRouterContent() {
                                         element={<MobileFeedPage />}
                                     />
                                     <Route
+                                        path="locations"
+                                        element={
+                                            <MobilePlaceholderPage
+                                                title="位置"
+                                                note="移动端好友位置页还没做"
+                                            />
+                                        }
+                                    />
+                                    <Route
                                         path="friends"
                                         element={
                                             <MobilePlaceholderPage
