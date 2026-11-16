@@ -332,6 +332,29 @@ struct SearchGroupsInput {
     params: vrcx_0_contracts::vrchat_requests::GroupSearchParams,
 }
 
+/// Cloud reads `ownerUserId` as a bare top-level argument, not an `{input:{…}}` envelope.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LocalModerationListArgs {
+    #[serde(default)]
+    owner_user_id: String,
+}
+
+async fn app__local_moderation_list(
+    state: Arc<RuntimeHostState>,
+    args: LocalModerationListArgs,
+) -> Result<Vec<vrcx_0_contracts::local_moderation::LocalModerationOutput>, CommandError> {
+    // Same persistence read cloud's local_data service makes: moderation state lives in the synced
+    // database, so this is a local read rather than a VRChat request.
+    let db = Arc::clone(state.database());
+    blocking("local moderation list", move || {
+        vrcx_0_persistence::local_moderation::local_moderation_list(
+            db.as_ref(),
+            vrcx_0_core::OwnerId::new(args.owner_user_id),
+        )
+    })
+    .await
+}
 /// Mirrors cloud's `SearchWorldsInput`.
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -612,6 +635,12 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         "app__notification_list_query",
         app__notification_list_query,
     );
+    registry.register_typed::<
+        LocalModerationListArgs,
+        Vec<vrcx_0_contracts::local_moderation::LocalModerationOutput>,
+        _,
+        _,
+    >("app__local_moderation_list", app__local_moderation_list);
     registry.register_typed::<InputArgs<SearchWorldsInput>, serde_json::Value, _, _>(
         "app__vrchat_search_worlds_get",
         app__vrchat_search_worlds_get,
@@ -753,7 +782,7 @@ mod tests {
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 31);
+        assert_eq!(registry.len(), 32);
     }
 }
 
@@ -893,6 +922,7 @@ async fn app__favorite_list(
     .map_err(|error| CommandError::failed(error.to_string()))?;
     Ok(rows)
 }
+
 
 
 
