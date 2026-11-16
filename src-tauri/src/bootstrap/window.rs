@@ -1,7 +1,9 @@
 use std::time::Duration;
 
+use tauri::WebviewWindowBuilder;
+#[cfg(any(windows, target_os = "linux", target_os = "macos"))]
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, Submenu};
-use tauri::{Manager, WebviewWindowBuilder};
+use tauri::Manager;
 
 use crate::error::AppError;
 use crate::state::{AppState, BACKGROUND_MODE_RESUME_ROUTE_STORAGE_KEY};
@@ -102,6 +104,7 @@ pub fn destroy_main_window_for_background_mode(app: &tauri::AppHandle) {
         if let Err(error) = destroy_main_window_releasing_web_process(&window) {
             tracing::warn!(error = %error, "failed to destroy main window for background mode");
             let _ = window.hide();
+            #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
             let _ = window.set_skip_taskbar(true);
         } else {
             vrcx_0_host_desktop::taskbar_overlay::forget_taskbar_overlay_notification();
@@ -225,8 +228,10 @@ fn present_main_window(app: &tauri::AppHandle) {
         cancel_background_delay(&state);
     }
     if let Some(window) = app.get_webview_window("main") {
+        #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
         let _ = window.set_skip_taskbar(false);
         let _ = window.show();
+        #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
         let _ = window.unminimize();
         let _ = window.set_focus();
     }
@@ -425,6 +430,14 @@ fn appindicator_available(can_load: impl Fn(&str) -> bool) -> bool {
 }
 
 pub fn refresh_tray_menu(app: &tauri::AppHandle, state: &AppState) -> Result<(), tauri::Error> {
+    // There is no tray on mobile, so there is no menu to refresh.
+    #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
+    {
+        let _ = (app, state);
+        return Ok(());
+    }
+
+    #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
     if let Some(tray) = app.tray_by_id("main") {
         let labels = tray_labels(state);
         let background_mode_active = is_background_mode_active(state);

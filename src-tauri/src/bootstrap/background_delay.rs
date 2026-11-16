@@ -193,6 +193,7 @@ fn destroy_main_window_for_background_mode_if_hidden(
     if let Err(error) = super::window::destroy_main_window_releasing_web_process(&window) {
         tracing::warn!(error = %error, "failed to destroy main window for background mode");
         let _ = window.hide();
+        #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
         let _ = window.set_skip_taskbar(true);
     }
     true

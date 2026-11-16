@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 
 use tauri::{AppHandle, State};
+#[cfg(any(windows, target_os = "linux", target_os = "macos"))]
 use tauri_plugin_autostart::ManagerExt as _;
 
 use crate::commands::blocking::run_blocking;
@@ -148,10 +149,12 @@ pub(crate) fn request_application_exit(app_handle: &AppHandle) {
         || {
             if let Some(window) = app_handle.get_webview_window("main") {
                 let _ = window.hide();
+                #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
                 let _ = window.set_skip_taskbar(true);
             }
         },
         |visible| {
+            #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
             if let Some(tray) = app_handle.tray_by_id("main") {
                 let _ = tray.set_visible(visible);
             }
@@ -227,6 +230,7 @@ static TRAY_TOOLTIP_STATE: Mutex<TrayTooltipState> = Mutex::new(TrayTooltipState
 });
 
 pub(crate) fn set_tray_icon_notification(app_handle: &AppHandle, notify: bool) {
+    #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
     if let Some(tray) = app_handle.tray_by_id("main") {
         if let Some(icon) = tray_icon_image(notify) {
             let _ = tray.set_icon(Some(tauri::image::Image::new(
@@ -266,6 +270,9 @@ fn update_tray_tooltip_state(
 fn apply_tray_tooltip(app_handle: &AppHandle, state: TrayTooltipState) {
     use tauri::Manager;
 
+    #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
+    return;
+    #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
     let Some(tray) = app_handle.tray_by_id("main") else {
         return;
     };
@@ -283,6 +290,7 @@ fn apply_tray_tooltip(app_handle: &AppHandle, state: TrayTooltipState) {
         Some(label) => format!("{base} — {label}"),
         None => base.to_string(),
     };
+    #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
     let _ = tray.set_tooltip(Some(tooltip));
 }
 
@@ -390,24 +398,27 @@ pub async fn app__set_startup(app_handle: AppHandle, enabled: bool) -> Result<bo
 
     impl AutostartPlatform for TauriAutostartPlatform {
         fn set_enabled(&self, enabled: bool) -> Result<(), String> {
-            if !(cfg!(target_os = "windows")
-                || cfg!(target_os = "linux")
-                || cfg!(target_os = "macos"))
+            #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
             {
-                return Err(format!(
+                let autolaunch = self.0.autolaunch();
+                return if enabled {
+                    autolaunch
+                        .enable()
+                        .map_err(|error| format!("enable autostart: {error}"))
+                } else {
+                    autolaunch
+                        .disable()
+                        .map_err(|error| format!("disable autostart: {error}"))
+                };
+            }
+
+            #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
+            {
+                let _ = enabled;
+                Err(format!(
                     "Autostart is not supported on {}",
                     vrcx_0_platform::host_capabilities::current_platform()
-                ));
-            }
-            let autolaunch = self.0.autolaunch();
-            if enabled {
-                autolaunch
-                    .enable()
-                    .map_err(|error| format!("enable autostart: {error}"))
-            } else {
-                autolaunch
-                    .disable()
-                    .map_err(|error| format!("disable autostart: {error}"))
+                ))
             }
         }
     }

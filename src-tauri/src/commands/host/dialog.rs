@@ -17,12 +17,19 @@ pub async fn pick_files<R: Runtime>(builder: FileDialogBuilder<R>) -> Option<Vec
     receiver.await.unwrap_or(None)
 }
 
+/// Folder picking has no mobile implementation in `tauri-plugin-dialog`.
+#[cfg(any(windows, target_os = "linux", target_os = "macos"))]
 pub async fn pick_folder<R: Runtime>(builder: FileDialogBuilder<R>) -> Option<FilePath> {
     let (sender, receiver) = tokio::sync::oneshot::channel();
     builder.pick_folder(move |selection| {
         let _ = sender.send(selection);
     });
     receiver.await.unwrap_or(None)
+}
+
+#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
+pub async fn pick_folder<R: Runtime>(_builder: FileDialogBuilder<R>) -> Option<FilePath> {
+    None
 }
 
 pub async fn save_file<R: Runtime>(builder: FileDialogBuilder<R>) -> Option<FilePath> {

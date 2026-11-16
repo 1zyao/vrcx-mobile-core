@@ -3,6 +3,7 @@ use std::time::Duration;
 use vrcx_0_application_core::RuntimeOperationStatus;
 
 use tauri::Manager;
+#[cfg(any(windows, target_os = "linux", target_os = "macos"))]
 use tauri_plugin_autostart::ManagerExt as _;
 
 use crate::state::AppState;
@@ -67,6 +68,9 @@ pub(super) fn sync_autostart_from_db(app: &tauri::App, state: &AppState) {
     }
 }
 
+/// Mobile targets have no autostart, tray or minimize: `set_skip_taskbar`,
+/// `minimize` and the autostart plugin are desktop-only.
+#[cfg(any(windows, target_os = "linux", target_os = "macos"))]
 pub(super) fn apply_autostart_window_state_if_needed(app: &tauri::App, state: &AppState) {
     let action = autostart_window_action(
         state.runtime_host().launched_from_autostart(),
@@ -122,6 +126,9 @@ pub(super) fn apply_autostart_window_state_if_needed(app: &tauri::App, state: &A
         }
     });
 }
+
+#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
+pub(super) fn apply_autostart_window_state_if_needed(_app: &tauri::App, _state: &AppState) {}
 
 #[cfg(test)]
 mod tests {
