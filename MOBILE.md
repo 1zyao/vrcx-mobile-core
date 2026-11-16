@@ -907,3 +907,53 @@ VRCM (Kotlin/Ktor)
 → 复制 `.so` 到 `composeApp/src/androidMain/jniLibs/x86_64/` → 重新打包。
 
 **这应该进构建脚本**，不能靠人工记。
+
+---
+
+## `.so` 构建步骤：脚本化（Gradle 路线放弃）
+
+### 为什么必须自动化
+
+加了 `app__web_execute` 之后忘了重编译 `.so`，探针返回：
+
+```
+`app__web_execute` is not available on this transport
+```
+
+APK 里还是旧库。这个坑每改一次 Rust 就会踩一次。
+
+### 试过 Gradle，失败，放弃
+
+在 `composeApp/build.gradle.kts` 里注册 `buildVrcxCore`（`preBuild` 依赖它），
+遇到两个问题：
+
+1. `android.ndkDirectory` 抛 `NDK is not installed` —— 模块没声明 `ndkVersion`
+2. 改成从 `ANDROID_NDK_HOME` 读之后，**同样的 cargo 命令在 Gradle 的 exec 里
+   3 秒即以 101 退出，在 shell 里却成功**。没继续深挖 —— 收益不抵成本
+
+Gradle 里那段已删除，避免留下一个坏掉的钩子。
+
+### 改成脚本：`scripts/build-core.ps1`（VRCM 仓库）
+
+内容就是手工验证过的那几条命令：
+
+```
+CC_<target> / AR_<target> / CARGO_TARGET_<TARGET>_LINKER 指向 NDK clang
+CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=link.exe
+cargo build --target <target> -p vrcx-0-mobile-core
+复制 .so 到 composeApp/src/androidMain/jniLibs/<abi>/
+```
+
+支持 `-Abi x86_64|arm64-v8a|all`。
+
+### 当前状态（诚实记录）
+
+- 直接跑 cargo：**x86_64 与 aarch64 都成功**（EXIT=0）
+- 脚本第一次运行**失败**（报 `could not compile ... 1 previous error`，但同一时刻
+  直接跑 cargo 成功）—— 疑似并发 cargo 锁或 PS 5.1 环境注入差异，**尚未定位**
+- 结论：脚本记录的是正确命令，但**还不能信任它替代手工步骤**
+
+### 待办
+
+- [ ] 单独（无其他 cargo 进程）跑一次脚本，确认真能成功
+- [ ] 若仍失败，改用 `cmd /c` 包一层并捕获 stderr，看清真实错误
