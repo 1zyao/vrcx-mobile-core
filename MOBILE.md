@@ -780,3 +780,47 @@ pub struct AuthenticatedRuntimeSession {
 ### 编译验证
 
 `:composeApp:compileGithubDebugKotlinAndroid` → BUILD SUCCESSFUL (33s)
+
+---
+
+## 登录生命周期全部走核心（2026-11-17）
+
+| 方法 | 核心命令 | 状态 |
+|---|---|---|
+`login()` | `app__vrchat_auth_session_start` | ✅ |
+`verify()` | `app__vrchat_auth_session_respond` | ✅ |
+`restoreAuth()` | `app__vrchat_auth_auto_login_start` | ✅ |
+`logout()` | `app__vrchat_auth_session_end` | ✅ |
+
+`restoreAuth` 不再是"读 AccountDto → 重放 cookie → 问 VRChat 要用户"，而是：
+
+```kotlin
+if (isVrcxCoreReady()) {
+    val core = runCatching { vrcxCoreClient().autoLoginStart() }.getOrNull()
+    if (core != null) {
+        if (core.state !is AuthState.Authed) return null     // 核心没有可恢复会话 → 保持登出
+        pendingCoreUserJson = core.userJson
+        return try { emitAuthed(null).getOrThrow(); AuthState.Authed } finally { pendingCoreUserJson = null }
+    }
+}
+// 核心不可用才走旧路径
+```
+
+关键取舍：**核心说没有可恢复会话时，不回退到旧路径**。回退会重新引入 VRCM 自己的 VRChat 请求，
+等于把刚切断的双客户端又接回去。
+
+### `AutoLoginOutcome` 是 untagged
+
+```rust
+#[serde(untagged)]
+pub enum AutoLoginOutcome {
+    Session(LoginSessionState),          // 有用户 JSON
+    Terminal(AutoLoginTerminalOutcome),  // throttled / expired
+}
+```
+
+所以映射对 Terminal 会落到 `Unauthorized`，`restoreAuth` 因此返回 null —— 正确行为。
+
+### 编译
+
+`:composeApp:compileGithubDebugKotlinAndroid` → BUILD SUCCESSFUL (35s)
