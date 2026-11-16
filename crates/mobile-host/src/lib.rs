@@ -30,6 +30,35 @@ where
         .map_err(|error| CommandError::failed(error.to_string()))
 }
 
+/// Mirrors cloud's `VrchatFavoriteWorldsInput`; the request goes to `worlds/favorites`.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct FavoriteWorldsInput {
+    #[serde(default)]
+    n: i32,
+    #[serde(default)]
+    offset: i32,
+    #[serde(default)]
+    owner_id: String,
+    #[serde(default)]
+    user_id: String,
+    #[serde(default)]
+    tag: String,
+}
+
+async fn app__vrchat_favorite_worlds_get(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<FavoriteWorldsInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let input = args.input;
+    let response = state
+        .vrchat_remote()
+        .favorite_worlds(input.n, input.offset, input.owner_id, input.user_id, input.tag)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
 /// Canonical argument envelope.
 ///
 /// The desktop and cloud frontends wrap the input in a key named after the command's
@@ -236,6 +265,10 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         "app__vrchat_search_groups_get",
         app__vrchat_search_groups_get,
     );
+    registry.register_typed::<InputArgs<FavoriteWorldsInput>, serde_json::Value, _, _>(
+        "app__vrchat_favorite_worlds_get",
+        app__vrchat_favorite_worlds_get,
+    );
     registry.register_typed::<FavoriteListArgs, Vec<vrcx_0_contracts::FavoriteRow>, _, _>(
         "app__favorite_list",
         app__favorite_list,
@@ -322,10 +355,11 @@ mod tests {
             "app__vrchat_friend_status_get",
             "app__vrchat_search_users_get",
             "app__vrchat_search_groups_get",
+            "app__vrchat_favorite_worlds_get",
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 16);
+        assert_eq!(registry.len(), 17);
     }
 }
 
@@ -465,6 +499,7 @@ async fn app__favorite_list(
     .map_err(|error| CommandError::failed(error.to_string()))?;
     Ok(rows)
 }
+
 
 
 
