@@ -1165,3 +1165,39 @@ foreach ($abi in $targets.Keys) { ... }    # 数组没有 .Keys → 循环体不
 都应该打印实际产物（路径 + 大小 + mtime），否则静默空转无法察觉。
 
 **2. Ktor 只对 `ws://` 做升级**（上一轮已修）
+
+---
+
+## Cookie 传递：静态验证通过（2026-11-17）
+
+之前最大的未知是：登录之后，`app__web_execute` 发出的请求到底带不带得上身份？
+
+查 `composition/src/context.rs:275-281`：
+
+```rust
+let login_api: Arc<dyn LoginApi> =
+    Arc::new(vrcx_0_outbound_adapters::VrchatLoginApi::new(Arc::clone(&web)));
+let auth_cookies: Arc<dyn AuthSessionCookies> =
+    Arc::new(vrcx_0_outbound_adapters::WebAuthSessionCookies::new(Arc::clone(&web)));
+```
+
+而 `VrchatLoginApi { web: Arc<WebClient> }`（`outbound-adapters/src/login_api.rs:13`）。
+
+**三者共用同一个 `Arc<WebClient>`**：
+
+```
+login_api        → web（登录写 cookie）
+auth_cookies     → web（读写 cookie）
+web_execute      → state.web_client()（同一个 web）
+```
+
+所以登录成功后，手机端通过 `app__web_execute` 发的请求**自动带上 `auth` cookie** ——
+不需要任何手动传参，这也正是"把客户端下沉到核心"的核心收益。
+
+这个风险此前一直标着"⚠️ 未验证"，现在**静态证明它不成立**，不必等真实登录才能推进读接口替换。
+
+### 仍需真实登录才能验的
+
+- 登录本身是否成功（账号/2FA）
+- 已认证请求的返回内容是否正确（而不是 401）
+- 事件流在已认证会话下是否产生 presence/notification
