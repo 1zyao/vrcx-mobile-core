@@ -685,3 +685,50 @@ I VrcxCore: feedRows ok: []
 - logcat 里能看到核心调用
 - 登录成功后 `emitAuthed` 正常发会话
 - VRChat 请求确实由 Rust 发出（VRCM 侧没有 `authApi` 的网络日志）
+
+---
+
+## 重要发现：登录改走核心之后，`emitAuthed` 仍在直连 VRChat（2026-11-17）
+
+```kotlin
+private suspend fun emitAuthed(password, response, expectedUserId): Result<Unit> = runCatching {
+    (response ?: authApi.userRes()).let {                    // ← 又一次 VRChat 请求
+        val userData = enrichCurrentUser(it.checkSuccess<CurrentUserData>())
+        …
+        authCookie = cookiesStorage.cookieValue(AUTH_COOKIE),          // ← 自己管 cookie
+        twoFactorAuthCookie = cookiesStorage.cookieValue(TWO_FACTOR_AUTH_COOKIE),
+```
+
+而 `loginLocked` / `verify` 在成功后都会调 `emitAuthed(...)`：
+
+```kotlin
+// verify
+return authApi.verify(verifyCode, authType).let { if (it.isSuccess) emitAuthed(password) else it }
+```
+
+**所以现在的实际状态是：**
+- 登录那一次 POST 由核心发出 ✅
+- 紧接着 `emitAuthed` 又用 `authApi.userRes()` 拉一次当前用户 ❌ （VRCM 自己的客户端）
+- cookie 也从 VRCM 自己的 `cookiesStorage` 读，而不是核心的 cookie jar ❌
+
+也就是说"两个 VRChat 客户端"只消除了三分之一。
+
+## 要真正切断，需要三件事
+
+1. **`current_user` 数据从核心来** —— 这是之前因为 endpoint/websocket 配置管道而搁置的那条命令。它现在是硬阻塞，不是可选项。
+2. **`emitAuthed` 接受外部传入的 user** —— 加一个可选参数 `user: CurrentUserData? = null`，非空时跳过 `authApi.userRes()`。这是纯增量改动，20+ 依赖方不受影响。
+3. **cookie 交给核心** —— `AccountDto.authCookie` / `twoFactorAuthCookie` 两个字段改为从核心的 saved snapshot 取，或者干脆不再往 AccountDto 里存 cookie。
+
+## 结论
+
+上一轮的"登录走核心"是必要但不充分的一步。要达成目标（VRCM 不再自己连 VRChat），`current_user` 那条命令是下一个绕不过去的关口 —— 而它卡在 `VrchatConfigRuntime::get()` 提供的 endpoint/websocket 上。
+
+### 下一步建议顺序
+
+```
+1. 接通 VrchatConfigRuntime::get() → endpoint / websocket（一次读配置 + 缓存）
+2. 注册 app__vrchat_auth_current_user_get
+3. emitAuthed 加 user 参数，登录/验证后从核心传入
+4. cookie 改读核心 snapshot
+5. 此时 authApi 只剩 verify 一处 → 换掉 → network/api/AuthApi 可删
+```
