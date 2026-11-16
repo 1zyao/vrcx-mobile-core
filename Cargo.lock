@@ -9982,6 +9982,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "vrcx-0-mobile-core"
+version = "0.1.0"
+dependencies = [
+ "jni 0.21.1",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "vrcx-0-command-server",
+ "vrcx-0-local-server",
+ "vrcx-0-mobile-host",
+]
+
+[[package]]
 name = "vrcx-0-mobile-host"
 version = "0.1.0"
 dependencies = [

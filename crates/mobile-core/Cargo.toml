@@ -1,0 +1,23 @@
+[package]
+name = "vrcx-0-mobile-core"
+version = "0.1.0"
+edition = "2021"
+license.workspace = true
+description = "In-process core for the phone app: host state plus the loopback command bus"
+
+[lib]
+name = "vrcx_0_mobile"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+tracing = { workspace = true }
+vrcx-0-command-server = { path = "../command-server" }
+vrcx-0-local-server = { path = "../local-server" }
+vrcx-0-mobile-host = { path = "../mobile-host" }
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21"
+
