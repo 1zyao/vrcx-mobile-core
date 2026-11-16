@@ -264,3 +264,43 @@ D:\Tools\...\registry       ← 无标签（默认 Medium）
 
 > 如果不想占 1.2 GB，替代方案是把 `CARGO_HOME` 指到工作区里
 > （`D:\vrcx0\.cargo-home`），代价是依赖重新下载一遍。
+
+---
+
+## /m/home 数据接线规格（下一步照着做）
+
+`buildFriendsSidebarVirtualRows`（`components/sidebar/friends-sidebar/friendsSidebarVirtualRowBuilder.ts:185`）
+要 14 个入参，来源已全部定位到 `components/sidebar/FriendsSidebar.tsx`：
+
+| 入参 | 来源 | 行号 |
+|---|---|---|
+`locationTimesByUserId` | `useFriendLocationTimeStore(s => s.byUserId)` | 161 |
+`sortContext` | `useFriendSortContext([sidebarSortMethod1..3], locationTimesByUserId)` | 164 |
+`favoriteFriendGroups` / `favoriteFriendIds` / `groupedFavoriteFriendIdsByGroupKey` / `localFriendFavoriteGroups` / `localFriendFavorites` | `useFriendsSidebarFavoriteState()` | 172–178 |
+显示偏好（`randomUserColours` / `showSidebarAvatarFrame` / `showSidebarNameplate` / `trustColor` / `showInstanceIdInLocation` / `ageGatedInstancesVisible`） | `useFriendsSidebarDisplayPreferences()` | 180–188 |
+`openGroups` | `useFriendsSidebarPreferences()` | 189–190 |
+`currentLocation` / `currentInviteLocation` | `useCurrentInviteContext()` | 192–196 |
+`currentLocationSnapshot` | useMemo，用 `resolveObservedPlayerUserIds(...)` | 197–214 |
+`rows` | useMemo（好友记录主表） | 242 |
+`favoriteRows` | useMemo | 481 |
+`onlineRows` | useMemo | 507 |
+`activeRows` | useMemo | 532 |
+`offlineRows` | useMemo | 555 |
+`favoriteGroupSections` | useMemo | 578 |
+
+另外需要：`friendsById`、`onlineIds`、`allActiveIds`、`allOfflineIds`、`filterIdsByQuery`（过滤搜索框）。
+
+### 做法
+
+新建 `src/features/mobile/useMobileFriendBoard.ts`，照抄上表把入参备齐后调
+`buildFriendsSidebarVirtualRows`，返回 `SidebarVirtualRow[]`。
+
+**决策：复制接线，不改桌面侧栏。**
+理由：本机编不了桌面版（aws-lc 问题），改 27KB 的 `FriendsSidebar.tsx` 无法回归验证；
+且那是上游派生代码，动它会让以后合上游更麻烦。代价是移动端多一份接线，风险隔离在 `/m` 内。
+
+### 已就绪的渲染层
+
+`src/features/mobile/MobileFriendRows.tsx` 已实现 `MobileSectionHeader` / `MobileFriendRow`，
+直接吃 `SidebarVirtualRow`；`userImage()` 返回普通 https URL（`/image/<fileId>/<version>/<res>`），
+不需要注册 `vrcx-0-img:` 协议（那是本地文件专用）。
