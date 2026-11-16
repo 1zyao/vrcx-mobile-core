@@ -219,6 +219,13 @@ pub const SYNC_EXCLUDED_CONFIG_KEYS: &[&str] = &[
     "config:vrcx_youtubeapikey",
     // This feature's own database password.
     "config:remotesync.password",
+    // Collector role is per-device: a 24/7 server sets `forced`, desktops keep
+    // `auto`. It must never travel — syncing it would make every desktop think
+    // it is the forced collector and duplicate the server's feed rows.
+    // (Stored keys carry the `vrcx_` infix, so list both spellings.)
+    "config:vrcx_remotesync.password",
+    "config:vrcx_remotesync.collector",
+    "config:remotesync.collector",
     // Schema/machine-local bookkeeping.
     "config:vrcx_0_databaseversion",
     "config:databaseversion",
