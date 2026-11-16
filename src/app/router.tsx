@@ -20,8 +20,8 @@ import { useGlobalKeyboardShortcuts } from '@/components/layout/useGlobalKeyboar
 import { useSidebarAutoHide } from '@/components/layout/useSidebarAutoHide';
 import { useTrayShortcut } from '@/components/layout/useTrayShortcut';
 import { WindowResizeHandles } from '@/components/layout/WindowResizeHandles';
-import { MobileFeedPage } from '@/features/mobile/MobileFeedPage';
-import { MobilePlaceholderPage } from '@/features/mobile/MobilePlaceholderPage';
+import { MOBILE_SCREENS } from '@/features/mobile/mobileRoutes';
+import { MobileScreenStub } from '@/features/mobile/MobileScreenStub';
 import { MobileShell } from '@/features/mobile/MobileShell';
 import { useIsMobile } from '@/lib/use-mobile';
 import { cn } from '@/lib/utils';
@@ -314,58 +314,20 @@ function AppRouterContent() {
                                     <Route
                                         index
                                         element={
-                                            <Navigate to="/m/feed" replace />
+                                            <Navigate to="/m/home" replace />
                                         }
                                     />
-                                    <Route
-                                        path="feed"
-                                        element={<MobileFeedPage />}
-                                    />
-                                    <Route
-                                        path="locations"
-                                        element={
-                                            <MobilePlaceholderPage
-                                                title="位置"
-                                                note="移动端好友位置页还没做"
-                                            />
-                                        }
-                                    />
-                                    <Route
-                                        path="friends"
-                                        element={
-                                            <MobilePlaceholderPage
-                                                title="好友"
-                                                note="移动端好友页还没做"
-                                            />
-                                        }
-                                    />
-                                    <Route
-                                        path="notifications"
-                                        element={
-                                            <MobilePlaceholderPage
-                                                title="通知"
-                                                note="移动端通知页还没做"
-                                            />
-                                        }
-                                    />
-                                    <Route
-                                        path="search"
-                                        element={
-                                            <MobilePlaceholderPage
-                                                title="搜索"
-                                                note="移动端搜索页还没做"
-                                            />
-                                        }
-                                    />
-                                    <Route
-                                        path="me"
-                                        element={
-                                            <MobilePlaceholderPage
-                                                title="我的"
-                                                note="移动端个人页还没做"
-                                            />
-                                        }
-                                    />
+                                    {MOBILE_SCREENS.map((screen) => (
+                                        <Route
+                                            key={screen.path}
+                                            path={screen.path}
+                                            element={
+                                                <MobileScreenStub
+                                                    screen={screen}
+                                                />
+                                            }
+                                        />
+                                    ))}
                                 </Route>
                             </Route>
                         </Routes>

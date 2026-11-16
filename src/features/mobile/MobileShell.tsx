@@ -1,113 +1,91 @@
-import {
-    MapPin,
-    Newspaper,
-    Search,
-    Settings,
-    Users,
-    type LucideIcon
-} from 'lucide-react';
+import { Bell, Heart, House, Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 
 import { cn } from '@/lib/utils';
 
-type MobileTab = {
-    to: string;
-    /** Same keys the desktop route table uses for these page titles. */
-    labelKey: string;
-    icon: LucideIcon;
-};
-
 /**
- * Destinations and their order mirror the pager list VRCM 1.1.3 ships with:
+ * Phone shell, laid out after VRCM 1.1.4's home scaffold: a floating pill with
+ * three destinations plus a separate circular search button
+ * (`presentation/screens/home/HomeScreen.kt`, `MainNavigationBar`).
  *
- *     FriendLocation → FriendList → Search → Feed
- *
- * The first three are VRCM's own; the feed is the single page VRCX adds (in
- * 1.1.3 it was a fourth pager). Nothing else is invented here.
+ * The screens themselves are ported one at a time; see `mobileRoutes.ts`.
  */
-const MOBILE_TABS: MobileTab[] = [
+const NAV_ITEMS = [
+    { to: '/m/home', icon: House, key: 'view.home.title', fallback: 'Home' },
     {
-        to: '/m/locations',
-        labelKey: 'app.routes.friend_locations',
-        icon: MapPin
+        to: '/m/favorites',
+        icon: Heart,
+        key: 'view.favorites.title',
+        fallback: 'Favorites'
     },
-    { to: '/m/friends', labelKey: 'app.routes.friends', icon: Users },
-    { to: '/m/search', labelKey: 'app.routes.search', icon: Search },
-    { to: '/m/feed', labelKey: 'app.routes.feed', icon: Newspaper }
-];
-
-function currentTitleKey(pathname: string) {
-    if (pathname.startsWith('/m/me')) {
-        return null;
+    {
+        to: '/m/inbox',
+        icon: Bell,
+        key: 'view.notification.title',
+        fallback: 'Inbox'
     }
-    return MOBILE_TABS.find((tab) => pathname.startsWith(tab.to))?.labelKey;
-}
+] as const;
 
 export function MobileShell() {
     const { t } = useTranslation();
     const { pathname } = useLocation();
     const navigate = useNavigate();
-    const titleKey = currentTitleKey(pathname);
 
     return (
-        <div className="bg-background flex h-full min-h-0 w-full flex-col overflow-hidden">
-            {/* pt clears the system status bar. `env(safe-area-inset-top)` is 0
-                inside Tauri's Android WebView (Android 15 forces edge-to-edge
-                for targetSdk 35+ but the inset is not exposed to CSS), so a
-                minimum is applied as well. */}
-            <header className="bg-background/85 flex h-[calc(3rem+max(env(safe-area-inset-top),1.75rem))] shrink-0 items-end gap-2 px-4 pt-[max(env(safe-area-inset-top),1.75rem)] pb-2 backdrop-blur-sm">
-                <h1 className="truncate text-[17px] leading-6 font-semibold tracking-tight">
-                    {titleKey ? t(titleKey) : 'VRCX-0'}
-                </h1>
-                <button
-                    type="button"
-                    aria-label={t('app.routes.settings')}
-                    onClick={() => navigate('/m/me')}
-                    className="text-muted-foreground active:text-foreground -mr-2 ml-auto flex size-9 items-center justify-center rounded-full"
-                >
-                    <Settings className="size-[18px]" />
-                </button>
-            </header>
-
+        <div className="bg-muted/40 flex h-full min-h-0 w-full flex-col overflow-hidden">
             <main className="min-h-0 flex-1 overflow-hidden">
                 <Outlet />
             </main>
 
-            {/*
-             * Floating pill bar: inset from the screen edges and above the
-             * system gesture area, so the content scrolls behind it the way
-             * VRCM's glass tab bar does.
-             */}
             <div className="pointer-events-none absolute inset-x-0 bottom-0 z-40">
-                <div className="pointer-events-auto mx-4 mb-[max(0.875rem,env(safe-area-inset-bottom))] flex items-center">
+                <div className="pointer-events-auto mx-4 mb-[max(0.875rem,env(safe-area-inset-bottom))] flex items-center gap-2.5">
                     <nav
-                        aria-label="主导航"
+                        aria-label={t('accessibility.sidebar', {
+                            defaultValue: 'Navigation'
+                        })}
                         className="border-border/50 bg-background/80 flex flex-1 items-center rounded-full border p-1.5 shadow-lg backdrop-blur-md"
                     >
-                        {MOBILE_TABS.map((tab) => {
-                            const Icon = tab.icon;
+                        {NAV_ITEMS.map((item) => {
+                            const Icon = item.icon;
                             return (
                                 <NavLink
-                                    key={tab.to}
-                                    to={tab.to}
+                                    key={item.to}
+                                    to={item.to}
                                     className={({ isActive }) =>
                                         cn(
-                                            'flex h-10 flex-1 items-center justify-center gap-1.5 rounded-full text-[12px] transition-colors',
+                                            'flex h-11 flex-1 flex-col items-center justify-center gap-0.5 rounded-full text-[11px] transition-colors',
                                             isActive
                                                 ? 'bg-foreground/8 text-foreground font-semibold'
                                                 : 'text-muted-foreground'
                                         )
                                     }
                                 >
-                                    <Icon className="size-[18px]" />
+                                    <Icon className="size-[20px]" />
                                     <span className="truncate">
-                                        {t(tab.labelKey)}
+                                        {t(item.key, {
+                                            defaultValue: item.fallback
+                                        })}
                                     </span>
                                 </NavLink>
                             );
                         })}
                     </nav>
+                    <button
+                        type="button"
+                        aria-label={t('view.search.title', {
+                            defaultValue: 'Search'
+                        })}
+                        onClick={() => navigate('/m/search')}
+                        className={cn(
+                            'border-border/50 bg-background/80 flex size-[3.5rem] shrink-0 items-center justify-center rounded-full border shadow-lg backdrop-blur-md',
+                            pathname.startsWith('/m/search')
+                                ? 'text-foreground'
+                                : 'text-muted-foreground'
+                        )}
+                    >
+                        <Search className="size-[20px]" />
+                    </button>
                 </div>
             </div>
         </div>
