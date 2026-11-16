@@ -1306,3 +1306,46 @@ I VrcxCore: probe vrchatGet(config) ok: {...}
 `HttpTimeout` 不生效 | 核心卡住时请求会一直挂着 | 应把 invoke 包进 `withTimeout` |
 响应无 content-type | 默认按 `application/json` | 需要核心回传响应头才能根治 |
 二进制 body 会退化 | 文件上传不可用 | 后续按需处理 |
+
+---
+
+## 好友列表无需事件映射就能有数据（2026-11-17 查证）
+
+之前我以为 `WebSocketApi` 一停，好友数据就没了。查证后发现不成立：
+
+```
+FriendsApi.fetchFriendList
+  → client.get { ... }.checkSuccess<List<FriendData>>()      ← 共享 client
+  → 现在由 CoreHttpEngine 承载 → 核心 → VRChat
+```
+
+而 `FriendService` 有两条自动刷新路径：
+
+```
+FriendService.kt:93    runTask = { refreshFriendList(it) }
+FriendService.kt:99    runTask = { refreshFriendList(it.sessionToken, offline = true) }
+```
+
+调用方也齐全（`FriendListPagerModel:1163/1196`、`FriendLocationPagerModel:192`、
+`FriendNetworkScreenModel:381`）。
+
+**结论：登录之后，好友列表会自动经由核心加载出来，不需要任何事件映射。**
+事件的缺口只在"实时变化"（好友上线、换房间、通知），不在"首次加载"。
+
+### 这条改变了验收路径
+
+目标里那句「页面显示本地真实数据并截图」，**只差一次登录**，不缺代码：
+
+```
+登录 → FriendsApi.fetchFriendList → CoreHttpEngine → 核心 web_client
+     → GET /auth/user/friends → 原始 JSON → FriendData DTO → 好友列表页
+```
+
+### 仍然缺事件的场景
+
+- 好友上下线 / 换房间的实时更新
+- 通知到达
+- 同步状态变化
+
+这些需要把核心推送的事件映射成 VRCM 的 `AccountWebSocketEvent`（或直接喂状态层）。
+但那不再是"能看到页面"的前置条件。
