@@ -1349,3 +1349,47 @@ FriendService.kt:99    runTask = { refreshFriendList(it.sessionToken, offline = 
 
 这些需要把核心推送的事件映射成 VRCM 的 `AccountWebSocketEvent`（或直接喂状态层）。
 但那不再是"能看到页面"的前置条件。
+
+---
+
+## 引擎方案的兑现：API 代码里不再有任何核心相关逻辑（2026-11-17）
+
+换引擎时我没注意到一个推论：**`client.get(...)` 本身也走核心了**。
+所以之前写的
+
+```kotlin
+if (isVrcxCoreReady()) {
+    Json.decodeFromJsonElement(...)      // 分支 A
+} else {
+    client.get(path).checkSuccess<T>()   // 分支 B —— 也在走核心
+}
+```
+
+两个分支是同一条路，`else` 不是 fallback，是**误导性的死代码**。
+
+已清掉：`UsersApi` 的 `fetchUser` / `getUserGroups` / `getMutualFriends` 全部还原成原始一行式：
+
+```kotlin
+suspend fun fetchUser(userId: String): UserData =
+    client.get("$USERS_API_PREFIX/$userId").checkSuccess<UserData>()
+
+suspend fun getUserGroups(userId: String): List<LimitedUserGroup> =
+    client.get("$USERS_API_PREFIX/$userId/groups").checkSuccess()
+
+suspend fun getMutualFriends(userId, n, offset): List<MutualFriendData> =
+    client.get("$USERS_API_PREFIX/$userId/mutuals/friends") { ... }.checkSuccess()
+```
+
+同时删掉 5 个不再需要的 import（`isVrcxCoreReady` / `vrcxCoreClient` / `vrchatGet` /
+`ListSerializer` / `Json`）。
+
+**这就是引擎方案的真正价值**：`network/` 下所有 Api 类保持原样，
+一个字符都不用改，全部经由核心。
+
+### 验证
+
+```
+compileGithubDebugKotlinAndroid   BUILD SUCCESSFUL (30s)
+installGithubDebug                EXIT=0
+pid 16631 / core ready / event connected / probeEvent 收到 / 无 FATAL
+```
