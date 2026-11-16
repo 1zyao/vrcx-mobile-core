@@ -1681,3 +1681,41 @@ command bus only: backend runtime not started
 编译 | ✅ | ✅ |
 端口绑定 | ✅ 日志证明 | ✅ |
 **实际请求** | ❌ 进程退出抢不到窗口 | ✅ 三个请求都有响应 |
+
+---
+
+## headless 的代理命令也验证通过（2026-11-17）
+
+在 `--command-bus-only` 的 headless 节点上直接打 `app__web_execute`：
+
+```json
+POST http://127.0.0.1:8896/api/invoke
+{"cmd":"app__web_execute",
+ "args":{"url":"https://api.vrchat.cloud/api/1/config","method":"GET"}}
+```
+
+响应：
+
+```
+ok = True
+vrc status = 200
+body = {"CampaignStatus":"Disabled","DisableBackgroundPreloads":true,
+        "HistoryFrameworkEternalBurrito":1,"VoiceEnableDegradation":false, ...}
+```
+
+### 意义
+
+一条 `app__web_execute` 现在在**两个宿主上都验证过**：
+
+| 宿主 | 传输 | 验证方式 |
+|---|---|---|
+手机（mobile-core） | loopback 随机端口 | 真机 logcat，拿到 `config` |
+headless | 固定端口 | curl，`ok=true` + `status=200` + 真实 body |
+
+也就是说"用一条通用代理替掉 41 条逐端点命令"这个决定，在两个部署形态上都成立。
+
+### 顺带验证到的东西
+
+- headless 的 `web_client` 在没有登录态的情况下也能发公开请求（不发 cookie 也不报错）
+- `state.web_client()` 在 headless 侧配置完整（UA / base url 都对，否则 VRChat 会拒）
+- 命令总线的超时/错误路径未被触发说明链路顺畅
