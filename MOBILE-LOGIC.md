@@ -437,3 +437,57 @@ InviteApi / FileApi / 各种 moderation 动作
 我现在是手工解析 JSON，长期应改为生成类型）。
 
 这一条我还没做，先记着，等第 1 批迁完后评估生成方案。
+
+---
+
+# 第 8 轮：目标确认 + 一个硬事实
+
+## 决定（用户明确）
+
+> VRCM 原来的那一套 对 VRChat API 的各种请求、登录的那一套，都废弃。
+> 让 VRCX 成为后端，而不是一个兼容层。
+
+所以终態是：
+
+```
+删 network/                      （22 个 Api 类 + Ktor 客户端配置 + cookie 存储）
+删 CoreHttpEngine                （连二进制/WS/超时那三个坑一起消失）
+删 AuthService 的本地会话簿记    （AccountDao / cookies / emitAuthed）
+留 presentation/                 数据改由命令 + 事件驱动
+留 VrcxCoreClient                = webTransport.ts
+```
+
+VRCM 不再有任何"发请求给 VRChat"的代码，也不再自己维护登录态。
+
+## 硬事实（本轮查出来的）
+
+**18 个域里，现在只有 feed 能服务。**
+
+| 检查项 | 结果 |
+|---|---|
+fork 的 host 有 `local_data()` | ❌ 没有 |
+fork 的 host 有 `social()` | ❌ 没有 |
+`feed_rows_query` | ✅ 对 db 的**自由函数**，所以能用 |
+`favorite_list` | 只在 `application-realtime/src/ports.rs` 作为 **trait 方法**存在 |
+cloud 的 `local_data()` 门面 | 不在 `cloud/crates/server/src` 里（在上层 assembly） |
+
+也就是说：**除了 feed，其它域都要先把 VRCX 的服务端门面（local_data / social）移植进 fork，
+命令才能注册。** 这不是"改调用点"能解决的，是移植工作。
+
+## 因此关键路径（不再改计划）
+
+```
+第 1 步：把 favorite_list 这条最小的端到端切片打通
+        a. 在 fork 里找到/移植 favorites 的读门面（application-realtime 的 trait 已有定义）
+        b. 实现一个最小的 host 门面（只做 favorites）
+        c. 注册 app__favorite_list，args = { kind }
+        d. curl 打真进程，用 596MB 真实库验证返回
+第 2 步：改 FavoriteApi 的 5 个调用点 → 删 FavoriteApi
+第 3 步：按同样套路做 avatars → worlds → groups → friends → notifications
+第 4 步：全部迁完，删 network/ 与 CoreHttpEngine 与 AuthService 簿记
+```
+
+## 本轮没有代码改动
+
+只是在决定方向后核实了「哪些域现在能用」。结论是只有 feed，
+所以必须先做门面移植 —— 这是绕不过去的一步，也是我之前没做的部分。
