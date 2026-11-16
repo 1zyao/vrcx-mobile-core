@@ -5,6 +5,7 @@ use crate::commands;
 use crate::macos_menu;
 use crate::state::AppState;
 
+#[cfg(any(windows, target_os = "linux", target_os = "macos"))]
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconEvent};
 use tauri::Emitter;
 use tauri::Manager;
@@ -38,6 +39,7 @@ fn restore_or_ensure_main_window(app: &tauri::AppHandle, failure_message: &'stat
 fn hide_window_to_tray(window: &tauri::Window) {
     bootstrap::sidebar_auto_hide::park(window.app_handle(), true);
     let _ = window.hide();
+    #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
     let _ = window.set_skip_taskbar(true);
 }
 
@@ -264,8 +266,11 @@ pub fn run() {
 
     let setup_app_data_dir = app_data_dir.clone();
     let builder = tauri::Builder::default()
-        .manage(bootstrap::linux_rendering::LinuxRenderingState::default())
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        .manage(bootstrap::linux_rendering::LinuxRenderingState::default());
+
+    // Single instance is a desktop-shell concept: two app windows, not two apps.
+    #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             // Spawn onto a worker thread so run_on_main_thread actually defers the window
             // rebuild; running it inline here would block the second instance and leave two
             // instances alive.
@@ -279,8 +284,9 @@ pub fn run() {
                     );
                 });
             });
-        }))
-        .plugin(tauri_plugin_deep_link::init())
+        }));
+
+    let builder = builder.plugin(tauri_plugin_deep_link::init())
         .register_asynchronous_uri_scheme_protocol("vrcx-0-img", move |ctx, request, responder| {
             let app_handle = ctx.app_handle().clone();
             tauri::async_runtime::spawn_blocking(move || {
@@ -337,8 +343,11 @@ pub fn run() {
             tauri_plugin_updater::Builder::new()
                 .pubkey(bootstrap::updater_public_key())
                 .build(),
-        )
-        .plugin(
+        );
+
+    // Window geometry persistence is desktop-shell only.
+    #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+    let builder = builder.plugin(
             tauri_plugin_window_state::Builder::new()
                 .with_state_flags(
                     tauri_plugin_window_state::StateFlags::SIZE
@@ -355,8 +364,7 @@ pub fn run() {
         Some(vec!["--autostart"]),
     ));
 
-    builder
-        .on_window_event(|window, event| {
+    let builder = builder.on_window_event(|window, event| {
             if window.label() != "main" {
                 return;
             }
@@ -400,8 +408,10 @@ pub fn run() {
                     commands::host::window::request_application_exit(window.app_handle());
                 }
             }
-        })
-        .on_tray_icon_event(|app, event| match event {
+        });
+
+    #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+    let builder = builder.on_tray_icon_event(|app, event| match event {
             TrayIconEvent::Click {
                 button: MouseButton::Left,
                 button_state: MouseButtonState::Up,
@@ -414,9 +424,14 @@ pub fn run() {
                 restore_or_ensure_main_window(app, "failed to show main window from tray");
             }
             _ => {}
-        })
-        .setup(move |app| bootstrap::setup_app_with_data_dir(app, setup_app_data_dir.clone()))
-        .on_menu_event(|app, event| match event.id().0.as_str() {
+        });
+
+    let builder = builder
+        .setup(move |app| bootstrap::setup_app_with_data_dir(app, setup_app_data_dir.clone()));
+
+    // Tray menu events only exist where there is a tray.
+    #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+    let builder = builder.on_menu_event(|app, event| match event.id().0.as_str() {
             "tray-open" => {
                 restore_or_ensure_main_window(app, "failed to open main window from tray menu");
             }
@@ -489,7 +504,9 @@ pub fn run() {
                 }
             }
             _ => {}
-        })
+        });
+
+    builder
         .invoke_handler(bindings_export::builder().invoke_handler())
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
