@@ -125,7 +125,9 @@ mod tests {
 
         // Blocking HTTP from a plain std socket: the runtime is already serving
         // on its own threads.
-        let body = r#"{"cmd":"app__feed_rows_query","args":{"userId":"usr_test","mode":"lookup","maxEntries":5}}"#;
+        // Canonical envelope: the input is wrapped in the command's parameter name
+        // (`query`), same as the desktop and cloud frontends send it.
+        let body = r#"{"cmd":"app__feed_rows_query","args":{"query":{"userId":"usr_test","mode":"lookup","maxEntries":5}}}"#;
         let request = format!(
             "POST /api/invoke HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
             endpoint.port,
