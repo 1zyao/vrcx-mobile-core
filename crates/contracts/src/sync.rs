@@ -735,6 +735,14 @@ pub struct SyncDeviceRecord {
     /// it collect, so no two nodes ever record the same friend event.
     #[serde(default)]
     pub role: String,
+    /// Collector priority advertised in `_sync_devices.priority`.
+    ///
+    /// Higher wins: the fresh device with the highest priority collects, and
+    /// equal priorities fall back to the smallest device id. The 24/7 server
+    /// sits at 0 so any active desktop (10, 20, ...) takes over instantly, and
+    /// the server only collects while every desktop is off.
+    #[serde(default)]
+    pub priority: i32,
     /// Server-captured client address (PostgreSQL inet_client_addr).
     #[serde(default)]
     pub ip_addr: String,

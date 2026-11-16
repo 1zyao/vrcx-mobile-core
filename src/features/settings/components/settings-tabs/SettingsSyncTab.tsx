@@ -295,6 +295,13 @@ export function SettingsSyncTab() {
         }
     };
 
+    // Election rank advertised by each device; mirrors
+    // `collector_election::effective_priority` (legacy `forced` == 1000).
+    const collectorPriority = (device: { role?: string; priority?: number }) =>
+        device.role === 'forced' && !device.priority
+            ? 1000
+            : (device.priority ?? 0);
+
     const canTest = host.trim().length > 0 && database.trim().length > 0;
     // Offline devices linger in the presence table until they age out of the
     // database; hiding them keeps the list to peers that can actually sync.
@@ -302,21 +309,20 @@ export function SettingsSyncTab() {
         ? status.remoteDevices.filter((device) => device.online)
         : [];
 
-    // Who is allowed to record live feed right now: every online `forced`
-    // device, or else the online `auto` device with the smallest id. Mirrors
+    // Who records live feed right now: the online device with the highest
+    // collector priority, ties broken by the smallest device id. Mirrors
     // `collector_election::blockers` on the Rust side, so the badge matches what
-    // the engine actually decided.
+    // the engine actually decided. A legacy `forced` row without a number ranks
+    // as priority 1000 there, so it does here too.
     const writerDeviceIds = new Set<string>(
         (() => {
             if (onlineDevices.length === 0) return [];
-            const forced = onlineDevices
-                .filter((device) => device.role === 'forced')
-                .map((device) => device.deviceId);
-            if (forced.length > 0) return forced;
-            const sorted = [...onlineDevices].sort((a, b) =>
-                a.deviceId.localeCompare(b.deviceId)
+            const ranked = [...onlineDevices].sort(
+                (a, b) =>
+                    collectorPriority(b) - collectorPriority(a) ||
+                    a.deviceId.localeCompare(b.deviceId)
             );
-            return sorted[0] ? [sorted[0].deviceId] : [];
+            return ranked[0] ? [ranked[0].deviceId] : [];
         })()
     );
 
@@ -784,7 +790,8 @@ export function SettingsSyncTab() {
                                                 </span>
                                                 {device.role ? (
                                                     <span className="text-muted-foreground shrink-0 font-mono text-[10px] uppercase">
-                                                        {device.role}
+                                                        {device.role} ·P
+                                                        {collectorPriority(device)}
                                                     </span>
                                                 ) : null}
                                                 <span className="ml-auto flex shrink-0 items-center gap-3">

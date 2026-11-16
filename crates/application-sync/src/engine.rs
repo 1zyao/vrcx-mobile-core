@@ -50,6 +50,8 @@ pub const CONFIG_TLS_VERIFY: &str = "remoteSync.tlsVerify";
 pub const CONFIG_ALLOW_PLAINTEXT: &str = "remoteSync.allowPlaintext";
 /// Collector election role: `auto` (default) | `forced` | `off`.
 pub const CONFIG_COLLECTOR_ROLE: &str = "remoteSync.collector";
+/// Collector priority: higher wins the election; ties fall back to device id.
+pub const CONFIG_COLLECTOR_PRIORITY: &str = "remoteSync.collectorPriority";
 
 pub const DEFAULT_INTERVAL_SEC: u64 = 60;
 pub const DEFAULT_RETAIN_DAYS: i64 = 30;
@@ -341,6 +343,13 @@ impl RemoteSyncEngine {
     /// `forced` never yields; `auto` yields to a fresh forced peer and to any
     /// fresh auto peer with a smaller device id; `off` keeps this device out of
     /// the device registry entirely so it cannot influence the election.
+    /// Configured collector priority (higher wins). Unparsable → 0.
+    pub fn collector_priority(&self) -> i32 {
+        let raw = vrcx_0_persistence::config::get_string(&self.db, CONFIG_COLLECTOR_PRIORITY, "")
+            .unwrap_or_default();
+        raw.trim().parse::<i32>().unwrap_or(0).clamp(-1000, 1000)
+    }
+
     pub fn collector_role(&self) -> String {
         let raw = vrcx_0_persistence::config::get_string(&self.db, CONFIG_COLLECTOR_ROLE, "")
             .unwrap_or_default();
@@ -369,6 +378,7 @@ impl RemoteSyncEngine {
                     app_version: self.app_version.clone(),
                     device_name: self.device_name.clone(),
                     role: collector_role,
+                    priority: self.collector_priority(),
                     ..SyncDeviceRecord::default()
                 })
                 .await;
