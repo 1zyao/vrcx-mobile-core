@@ -812,3 +812,12 @@ impl RuntimeHostState {
 
 #[cfg(test)]
 mod profile_bundle_tests;
+
+impl RuntimeHostState {
+    /// See [`RuntimeHostContext::login_session_runtime`].
+    pub fn login_session_runtime(
+        &self,
+    ) -> &vrcx_0_application::auth::LoginSessionRuntime {
+        self.runtime_context.login_session_runtime()
+    }
+}

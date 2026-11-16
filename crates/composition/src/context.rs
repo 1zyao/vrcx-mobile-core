@@ -579,3 +579,14 @@ impl RuntimeHostContext {
         Ok(profile)
     }
 }
+
+impl RuntimeHostContext {
+    /// Login session runtime (password / 2FA / auto-login orchestration).
+    ///
+    /// Exposed so a non-desktop host (the phone core) can drive the login flow
+    /// over its command surface without re-implementing the credential store,
+    /// cookie jar or 2FA handling.
+    pub fn login_session_runtime(&self) -> &LoginSessionRuntime {
+        &self.login_session
+    }
+}
