@@ -824,3 +824,41 @@ pub enum AutoLoginOutcome {
 ### 编译
 
 `:composeApp:compileGithubDebugKotlinAndroid` → BUILD SUCCESSFUL (35s)
+
+---
+
+## 第一个业务 API 走核心：UsersApi.fetchUser（2026-11-17）
+
+```kotlin
+suspend fun fetchUser(userId: String): UserData =
+    if (isVrcxCoreReady()) {
+        Json.decodeFromJsonElement(
+            UserData.serializer(),
+            vrcxCoreClient().vrchatGet("$USERS_API_PREFIX/$userId")
+        )
+    } else {
+        client.get("$USERS_API_PREFIX/$userId").checkSuccess<UserData>()
+    }
+```
+
+新增 `VrcxCoreClient.vrchatGet(path)`：走 `app__web_execute`，带状态码检查，
+返回原始 JSON。VRCM 的 DTO 原样反序列化 —— 因为核心转发的是 VRChat 原生响应。
+
+**这是第一个"页面数据由 Rust 核心提供"的 API 方法。** 所有调用 `fetchUser` 的地方
+（用户详情、好友卡片等）现在都经由核心，而它们的代码一行没改。
+
+### 验证
+
+```
+compileGithubDebugKotlinAndroid   BUILD SUCCESSFUL (29s)
+installGithubDebug                EXIT=0
+pid 13945 / core ready on port 44009 / 无 FATAL
+```
+
+尚未用真实数据验证（需要登录后点开某个用户），但编译与启动无回归。
+
+### 可复制的模式
+
+每个 VRChat 读接口都可以照这个形状换：`isVrcxCoreReady()` 分流 + 核心返回原始 JSON +
+原 DTO 反序列化。UsersApi 里还有 10 个方法（searchUser / getUserGroups /
+getMutualFriends / …），WorldsApi / AvatarsApi / GroupsApi 同理。
