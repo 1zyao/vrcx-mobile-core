@@ -3323,6 +3323,7 @@
                     "writing_tag": "正在写入",
                     "health_label": "健康度",
                     "health_unhealthy": "不健康（已弃权）",
+                    "health_unknown": "该设备未上报健康度（旧版本）",
                     "health_healthy": "正常",
                     "health_websocketUnstable": "连接不稳定",
                     "health_authExpired": "登录已过期",

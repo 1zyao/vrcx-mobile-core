@@ -3334,6 +3334,7 @@
                     "writing_tag": "Writing now",
                     "health_label": "Health",
                     "health_unhealthy": "Unhealthy (yielded)",
+                    "health_unknown": "This device does not report health (older build)",
                     "health_healthy": "OK",
                     "health_websocketUnstable": "Connection unstable",
                     "health_authExpired": "Session expired",

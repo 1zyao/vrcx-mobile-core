@@ -323,9 +323,27 @@ export function SettingsSyncTab() {
             ? 1000
             : (device.priority ?? 0);
 
-    // Health score each device advertises (100 = healthy, 0 = it yielded).
-    const deviceHealth = (device: { health?: number }) =>
-        typeof device.health === 'number' ? device.health : 100;
+    // Health score each device advertised, or `null` when it never reported one.
+    //
+    // Only a build with the health tracker fills `healthReason`, so that field is
+    // the reliable "did it measure anything" signal. Showing 100 for a device
+    // that never measured itself would claim something we do not know; unknown is
+    // treated as healthy for the ranking (fail-open, same as the Rust election).
+    const deviceHealth = (device: {
+        health?: number;
+        healthReason?: string;
+    }): number | null =>
+        device.healthReason && device.healthReason.trim()
+            ? (device.health ?? 0)
+            : null;
+
+    const deviceHealthy = (device: {
+        health?: number;
+        healthReason?: string;
+    }) => {
+        const health = deviceHealth(device);
+        return health === null || health > 0;
+    };
 
     // Reasons come from the backend as stable identifiers; unknown values fall
     // back to "healthy" so a newer host cannot break the label.
@@ -370,8 +388,14 @@ export function SettingsSyncTab() {
     // as priority 1000 there, so it does here too.
     const writerDeviceIds = new Set<string>(
         (() => {
-            if (onlineDevices.length === 0) return [];
-            const ranked = [...onlineDevices].sort(
+            // Mirror collector_election::may_collect: a device that reported
+            // itself unhealthy has yielded, so it must never be shown as the
+            // writer even when its priority is the highest.
+            const eligible = onlineDevices.filter((device) =>
+                deviceHealthy(device)
+            );
+            if (eligible.length === 0) return [];
+            const ranked = [...eligible].sort(
                 (a, b) =>
                     collectorRank(b) - collectorRank(a) ||
                     a.deviceId.localeCompare(b.deviceId)
@@ -903,31 +927,42 @@ export function SettingsSyncTab() {
                                                 ) : null}
                                                 <Badge
                                                     variant={
-                                                        deviceHealth(device) <=
-                                                        0
+                                                        deviceHealth(device) !==
+                                                            null &&
+                                                        deviceHealth(device)! <=
+                                                            0
                                                             ? 'destructive'
                                                             : 'secondary'
                                                     }
                                                     className="h-4 px-1.5 text-[10px]"
                                                     title={
-                                                        deviceHealth(device) <=
-                                                        0
+                                                        deviceHealth(device) ===
+                                                        null
                                                             ? t(
-                                                                  'view.settings.sync.status.health_unhealthy'
+                                                                  'view.settings.sync.status.health_unknown'
                                                               )
-                                                            : t(
-                                                                  'view.settings.sync.status.health_healthy'
-                                                              )
+                                                            : deviceHealth(
+                                                                    device
+                                                                )! <= 0
+                                                              ? t(
+                                                                    'view.settings.sync.status.health_unhealthy'
+                                                                )
+                                                              : t(
+                                                                    'view.settings.sync.status.health_healthy'
+                                                                )
                                                     }
                                                 >
                                                     {t(
                                                         'view.settings.sync.status.health_label'
                                                     )}{' '}
-                                                    {deviceHealth(device)}
+                                                    {deviceHealth(device) ===
+                                                    null
+                                                        ? '—'
+                                                        : deviceHealth(device)}
                                                 </Badge>
                                                 {!device.online ? null : deviceHealth(
                                                       device
-                                                  ) <= 0 ? (
+                                                  ) === 0 ? (
                                                     <span className="text-destructive shrink-0 text-[10px]">
                                                         {healthReasonLabel(
                                                             device.healthReason
