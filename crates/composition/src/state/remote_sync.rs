@@ -232,6 +232,10 @@ impl RemoteSyncHost {
             last_cycle_tables: Vec::new(),
             next_cycle_in_secs: None,
             cycle_history: Vec::new(),
+            collector_health: vrcx_0_contracts::collector_health::snapshot().score as i64,
+            collector_reason: crate::state::remote_sync::collector_election::read_role(self)
+                .clone(),
+            collector_blockers: Vec::new(),
         }
     }
 

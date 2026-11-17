@@ -5,10 +5,10 @@ use tauri::State;
 use crate::error::AppError;
 use crate::state::AppState;
 
+use vrcx_0_contracts::ConfigWriteEntry;
 use vrcx_0_contracts::{
     SyncBootstrapProgress, SyncConnectionFields, SyncConnectionTestResult, SyncStatusSnapshot,
 };
-use vrcx_0_contracts::ConfigWriteEntry;
 
 fn config_entry(key: &str, value: impl std::fmt::Display) -> ConfigWriteEntry {
     ConfigWriteEntry {

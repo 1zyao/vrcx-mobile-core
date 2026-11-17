@@ -7768,6 +7768,14 @@ export type SyncDeviceRecord = {
      *  the server only collects while every desktop is off.
      */
     priority?: number;
+    /**
+     *  Health score the device reports in `_sync_devices.health` (0 or 100).
+     *
+     *  Priority is intent; health is capability. A device at score 0 has handed
+     *  collection over on its own (websocket flapping, expired session, sync
+     *  failures) and never blocks a healthy peer.
+     */
+    health?: number;
     /**  Server-captured client address (PostgreSQL inet_client_addr). */
     ipAddr?: string;
     /**  Server-clock timestamp of the device's last heartbeat (per cycle). */
@@ -7822,6 +7830,16 @@ export type SyncStatusSnapshot = {
      *  restarts).
      */
     cycleHistory?: SyncCycleRecord[];
+    /**  This device's own health score (0 degraded, 100 healthy). */
+    collectorHealth?: number;
+    /**
+     *  Why this device is or is not collecting, as a stable machine reason:
+     *  `healthy`, `websocketUnstable`, `authExpired`, `syncFailing`,
+     *  `recovering`, `disabled`, `yielded`.
+     */
+    collectorReason?: string;
+    /**  Devices this one is currently yielding to (empty when it collects). */
+    collectorBlockers?: string[];
 };
 
 /**

@@ -841,17 +841,19 @@ impl RemoteSyncStore for PostgresSyncStore {
             // itself, so a device cannot misreport its own address.
             client
                 .execute(
-                    "INSERT INTO _sync_devices (device_id, app_version, device_name, client_addr, last_seen_at, role, priority)
-                     VALUES ($1, $2, $3, inet_client_addr()::text, now(), $4, $5)
+                    "INSERT INTO _sync_devices (device_id, app_version, device_name, client_addr, last_seen_at, role, priority, health)
+                     VALUES ($1, $2, $3, inet_client_addr()::text, now(), $4, $5, $6)
                      ON CONFLICT (device_id) DO UPDATE SET app_version = EXCLUDED.app_version,
                        device_name = EXCLUDED.device_name, client_addr = EXCLUDED.client_addr,
-                      last_seen_at = now(), role = EXCLUDED.role, priority = EXCLUDED.priority",
+                      last_seen_at = now(), role = EXCLUDED.role, priority = EXCLUDED.priority,
+                         health = EXCLUDED.health",
                     &[
                         &record.device_id,
                         &record.app_version,
                         &record.device_name,
                         &record.role,
                         &record.priority,
+                        &record.health,
                     ],
                 )
                 .await
@@ -868,7 +870,7 @@ impl RemoteSyncStore for PostgresSyncStore {
                     "SELECT device_id, app_version, device_name, client_addr,
                             last_seen_at::text,
                             EXTRACT(EPOCH FROM (now() - last_seen_at))::bigint AS seen_seconds_ago,
-                            role, priority
+                            role, priority, health
                      FROM _sync_devices ORDER BY last_seen_at DESC",
                     &[],
                 )
@@ -885,6 +887,7 @@ impl RemoteSyncStore for PostgresSyncStore {
                         seen_seconds_ago: row.try_get(5).unwrap_or_default(),
                         role: row.try_get(6).unwrap_or_default(),
                         priority: row.try_get(7).unwrap_or_default(),
+                        health: row.try_get(8).unwrap_or_default(),
                         ..SyncDeviceRecord::default()
                     })
                     .collect(),
@@ -912,7 +915,7 @@ impl RemoteSyncStore for PostgresSyncStore {
     }
 }
 
-const PROTOCOL_TABLE_DDL: [&str; 8] = [
+const PROTOCOL_TABLE_DDL: [&str; 9] = [
     "CREATE TABLE IF NOT EXISTS _sync_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '')",
     "CREATE TABLE IF NOT EXISTS sync_ops (
         server_seq BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -933,12 +936,14 @@ const PROTOCOL_TABLE_DDL: [&str; 8] = [
         client_addr TEXT NOT NULL DEFAULT '',
         last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
         role TEXT NOT NULL DEFAULT 'auto',
-        priority INTEGER NOT NULL DEFAULT 0
+        priority INTEGER NOT NULL DEFAULT 0,
+        health INTEGER NOT NULL DEFAULT 100
     )",
     "ALTER TABLE _sync_devices ADD COLUMN IF NOT EXISTS device_name TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE _sync_devices ADD COLUMN IF NOT EXISTS client_addr TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE _sync_devices ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'auto'",
     "ALTER TABLE _sync_devices ADD COLUMN IF NOT EXISTS priority INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE _sync_devices ADD COLUMN IF NOT EXISTS health INTEGER NOT NULL DEFAULT 100",
 ];
 async fn ensure_protocol_tables(
     client: &impl tokio_postgres::GenericClient,

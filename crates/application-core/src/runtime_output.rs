@@ -50,6 +50,9 @@ fn format_realtime_ws_status(
 ) -> Option<RuntimeOutputLine> {
     let status = payload.status.as_str();
     let reason = payload.reason.as_deref().unwrap_or_default().trim();
+    // Feed the collector election: a device whose socket keeps dropping should
+    // let a healthy peer record the feed even if it has a higher priority.
+    vrcx_0_contracts::collector_health::record_websocket_status(status, Some(reason));
     let detail = if reason.is_empty() {
         format!("ws status: {status}")
     } else {

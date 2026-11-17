@@ -306,6 +306,27 @@ export function SettingsSyncTab() {
             ? 1000
             : (device.priority ?? 0);
 
+    // Health score each device advertises (100 = healthy, 0 = it yielded).
+    const deviceHealth = (device: { health?: number }) =>
+        typeof device.health === 'number' ? device.health : 100;
+
+    // Reasons come from the backend as stable identifiers; unknown values fall
+    // back to "healthy" so a newer host cannot break the label.
+    const healthReasonLabel = (reason?: string) => {
+        const known = [
+            'healthy',
+            'websocketUnstable',
+            'authExpired',
+            'syncFailing',
+            'recovering',
+            'disabled',
+            'yielded'
+        ];
+        const key = (reason ?? '').trim();
+        const safe = known.includes(key) ? key : 'healthy';
+        return t(`view.settings.sync.status.health_${safe}`);
+    };
+
     const canTest = host.trim().length > 0 && database.trim().length > 0;
     // Offline devices linger in the presence table until they age out of the
     // database; hiding them keeps the list to peers that can actually sync.
@@ -783,6 +804,20 @@ export function SettingsSyncTab() {
                                     <LaptopIcon className="size-3.5" />
                                     {t('view.settings.sync.status.devices')}
                                 </p>
+                                <p className="text-muted-foreground mb-2 text-[11px]">
+                                    {writerDeviceIds.has(status.deviceId)
+                                        ? t(
+                                              'view.settings.sync.status.self_collecting'
+                                          )
+                                        : t(
+                                              'view.settings.sync.status.self_not_collecting',
+                                              {
+                                                  reason: healthReasonLabel(
+                                                      status.collectorReason
+                                                  )
+                                              }
+                                          )}
+                                </p>
                                 <ul className="flex flex-col gap-1.5">
                                     {onlineDevices.map((device) => {
                                         const isSelf =
@@ -833,6 +868,28 @@ export function SettingsSyncTab() {
                                                     <span className="text-muted-foreground shrink-0 font-mono text-[10px] uppercase">
                                                         {device.role} ·P
                                                         {collectorRank(device)}
+                                                    </span>
+                                                ) : null}
+                                                {deviceHealth(device) <= 0 ? (
+                                                    <Badge
+                                                        variant="destructive"
+                                                        className="h-4 px-1.5 text-[10px]"
+                                                        title={t(
+                                                            'view.settings.sync.status.health_unhealthy'
+                                                        )}
+                                                    >
+                                                        {t(
+                                                            'view.settings.sync.status.health_label'
+                                                        )}{' '}
+                                                        0
+                                                    </Badge>
+                                                ) : !writerDeviceIds.has(
+                                                      device.deviceId
+                                                  ) ? (
+                                                    <span className="text-muted-foreground shrink-0 text-[10px]">
+                                                        {t(
+                                                            'view.settings.sync.status.health_yielded'
+                                                        )}
                                                     </span>
                                                 ) : null}
                                                 <span className="ml-auto flex shrink-0 items-center gap-3">
