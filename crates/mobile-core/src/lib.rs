@@ -42,19 +42,6 @@ pub fn start_core(files_dir: &Path, device_name: &str) -> Result<CoreEndpoint, S
     // The whole VRCX-0 runtime, assembled the same way the desktop and headless
     // hosts assemble it. Phone-specific extras are no-ops (see `host`).
     let host = host::build_host(files_dir, device_name)?;
-    // The sync identity belongs to this installation, not to whatever database happens to sit here.
-    // Copying a data directory copies `_sync_meta.sync.deviceId` too, and `_sync_devices` is keyed by
-    // it, so two machines would share one presence row. Adopting the installation's own id wipes the
-    // local sync markers, and the engine then bootstraps from scratch - which is what a database this
-    // device did not write deserves.
-    let install_id = install_device_id(files_dir)?;
-    let adopted = host
-        .remote_sync()
-        .adopt_install_identity(&install_id)
-        .map_err(|error| format!("adopt sync identity: {error}"))?;
-    if adopted {
-        eprintln!("sync identity adopted for this installation: {install_id}");
-    }
     // Installing the data services is what actually starts the background loops - including
     // `remote_sync_host.start_auto()`, VRCX's shared-database sync. The desktop and headless hosts
     // do this inside their runtime start; the phone host had no equivalent, so its core assembled
@@ -82,25 +69,6 @@ pub fn start_core(files_dir: &Path, device_name: &str) -> Result<CoreEndpoint, S
     std::mem::forget(runtime);
 
     Ok(CoreEndpoint { port, token })
-}
-
-/// The sync identity of this installation, kept next to the database but outside it.
-///
-/// Deliberately a file: `_sync_meta` travels with a copied data directory, a file in the app's own
-/// data directory is recreated by a fresh install, so the two cases stay distinguishable. Missing
-/// file means "this install never had an identity" - either a first run or a database copied from
-/// another machine - and both get a new one.
-fn install_device_id(files_dir: &Path) -> Result<String, String> {
-    let path = files_dir.join("device-id");
-    if let Ok(existing) = std::fs::read_to_string(&path) {
-        let trimmed = existing.trim();
-        if !trimmed.is_empty() {
-            return Ok(trimmed.to_string());
-        }
-    }
-    let id = uuid::Uuid::new_v4().simple().to_string();
-    std::fs::write(&path, &id).map_err(|error| format!("write device-id: {error}"))?;
-    Ok(id)
 }
 
 /// JNI entry point for the Android app.
@@ -160,7 +128,6 @@ mod tests {
         assert!(endpoint.port > 0, "ephemeral port assigned");
         assert!(endpoint.token.len() >= 43, "token is high entropy");
         assert!(dir.join("VRCX-0.sqlite3").exists(), "sqlite opened");
-        assert!(dir.join("device-id").exists(), "install identity written");
 
         let _ = std::fs::remove_dir_all(dir);
     }

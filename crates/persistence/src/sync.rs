@@ -174,32 +174,6 @@ pub fn sync_device_id(db: &DatabaseService) -> Result<String, Error> {
     Ok(device)
 }
 
-/// Rebinds this database's sync identity to `device_id`, wiping every other local sync marker.
-///
-/// The identity lives in `_sync_meta`, which is local and never synced - but copying a data
-/// directory copies it anyway, and then two machines present the same id: the remote `_sync_devices`
-/// row (keyed by device id) is shared, so one device's presence, name and address keep overwriting
-/// the other's, and neither gets its own line in the device list.
-///
-/// Everything in `_sync_meta` describes "where this database is in the sync stream", so it is only
-/// valid for the identity that produced it. Wiping it makes the engine bootstrap again from scratch,
-/// which is the correct outcome: a different device that happens to hold a copy is not mid-stream.
-///
-/// Returns whether the identity changed, so a caller can tell "already mine" from "adopted".
-pub fn sync_adopt_identity(db: &DatabaseService, device_id: &str) -> Result<bool, Error> {
-    ensure_sync_tables(db)?;
-    let device_id = device_id.trim();
-    if device_id.is_empty() {
-        return Err(Error::Custom("sync device id must not be empty".into()));
-    }
-    if sync_meta_get(db, META_DEVICE_ID)?.as_deref() == Some(device_id) {
-        return Ok(false);
-    }
-    db.execute_non_query("DELETE FROM _sync_meta", &params(&[]))?;
-    sync_meta_set(db, META_DEVICE_ID, device_id)?;
-    Ok(true)
-}
-
 fn params(entries: &[(&str, Value)]) -> HashMap<String, Value> {
     entries
         .iter()

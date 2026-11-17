@@ -239,19 +239,6 @@ impl RemoteSyncHost {
         vrcx_0_persistence::sync::sync_device_id(&self.db).map_err(Error::from)
     }
 
-    /// Rebinds this database to the identity of the installation that owns it.
-    ///
-    /// A data directory copied from another machine carries that machine's device id in
-    /// `_sync_meta`, and the remote `_sync_devices` table is keyed by it - so both machines fight
-    /// over one presence row instead of each having its own. Adopting the installation's own id wipes
-    /// the local sync markers, which makes the engine bootstrap again; that is the right outcome for
-    /// a database this device did not write.
-    ///
-    /// Returns whether the identity changed.
-    pub fn adopt_install_identity(&self, device_id: &str) -> Result<bool> {
-        vrcx_0_persistence::sync::sync_adopt_identity(&self.db, device_id).map_err(Error::from)
-    }
-
     /// One-off connection probe for the settings dialog. An empty password
     /// falls back to the stored one so the UI never needs to resend secrets.
     pub async fn test_connection(
