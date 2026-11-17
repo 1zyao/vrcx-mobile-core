@@ -13,7 +13,7 @@ use std::sync::Arc;
 use vrcx_0_composition::RuntimeHostState;
 
 /// The same `GroupApiDeps` the phone's group commands build inside `composition`.
-fn group_api_deps(state: &RuntimeHostState) -> vrcx_0_application::social::GroupApiDeps {
+pub(crate) fn group_api_deps(state: &RuntimeHostState) -> vrcx_0_application::social::GroupApiDeps {
     let assembly = state.desktop_assembly();
     vrcx_0_application::social::GroupApiDeps::new(
         Arc::new(vrcx_0_outbound_adapters::VrchatRequestAdapter::new(

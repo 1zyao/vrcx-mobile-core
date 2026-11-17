@@ -11,11 +11,13 @@
 use std::sync::Arc;
 
 mod dialog;
+mod state_ext;
 mod instance_history;
 
 use std::collections::HashMap;
 
 use vrcx_0_command_server::{CommandBus, CommandError, CommandRegistry, EventBus};
+use state_ext::HostStateExt;
 use vrcx_0_composition::RuntimeHostState;
 use vrcx_0_application::auth::{
     AutoLoginStartInput, LoginSessionCancelInput, LoginSessionEnd, LoginSessionRespondInput,

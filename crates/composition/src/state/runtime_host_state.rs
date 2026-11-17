@@ -824,30 +824,7 @@ impl RuntimeHostState {
         &self.vrchat_remote
     }
 
-    /// Remote favourite add, through the same coordinator the desktop graph uses.
-    ///
-    /// Favourites are addressed by entity id in this model (`entity_id` here,
-    /// `object_id` on delete), not by VRChat's favourite-record id.
-    pub async fn favorite_add_remote(
-        &self,
-        input: vrcx_0_application::favorites::FavoriteRemoteAddInput,
-    ) -> vrcx_0_application_core::Result<vrcx_0_contracts::vrchat_api::VrchatResponse> {
-        self.desktop_assembly()
-            .favorite_mutations()
-            .add_remote("Remote favorite mutation", input)
-            .await
-    }
 
-    /// Remote favourite delete, addressed by entity id.
-    pub async fn favorite_delete_remote(
-        &self,
-        input: vrcx_0_application::favorites::FavoriteRemoteDeleteInput,
-    ) -> vrcx_0_application_core::Result<vrcx_0_contracts::vrchat_api::VrchatResponse> {
-        self.desktop_assembly()
-            .favorite_mutations()
-            .delete_remote("Remote favorite mutation", input)
-            .await
-    }
 
     pub fn web_client(&self) -> &Arc<WebClient> {
         &self.web
@@ -918,12 +895,6 @@ impl RuntimeHostState {
 mod profile_bundle_tests;
 
 impl RuntimeHostState {
-    /// See [`RuntimeHostContext::login_session_runtime`].
-    pub fn login_session_runtime(
-        &self,
-    ) -> &vrcx_0_application::auth::LoginSessionRuntime {
-        self.runtime_context.login_session_runtime()
-    }
 }
 
 
@@ -941,233 +912,21 @@ impl RuntimeHostState {
 }
 
 impl RuntimeHostState {
-    /// Session restore, see [`RuntimeHostContext::auto_login_start`].
-    pub async fn auto_login_start(
-        &self,
-        input: vrcx_0_application::auth::AutoLoginStartInput,
-    ) -> vrcx_0_application_core::Result<vrcx_0_application::auth::AutoLoginOutcome>
-    {
-        self.runtime_context.auto_login_start(input).await
-    }
 }
 
-impl RuntimeHostState {
-    /// Runtime event bus, see [`RuntimeHostContext::event_bus`].
-    ///
-    /// Needed by non-desktop transports: the desktop shell installs its Tauri bridge
-    /// as the sink, and the phone core installs its loopback broadcast instead.
-    pub fn event_bus(&self) -> &vrcx_0_application_core::RuntimeEventBus {
-        self.runtime_context.event_bus()
-    }
-}
 
 impl RuntimeHostState {
-    /// World detail read behind `app__world_get`.
-    ///
-    /// The body is cloud's `LocalDataRuntime::world_get`
-    /// (cloud/crates/runtime-host-server/src/local_data.rs:214), with the dependencies
-    /// swapped for the ones this runtime already owns rather than new ones: the shared
-    /// `WorldCache` is backed by `LocalWorldCacheAdapter`, which reads the local
-    /// `worlds` table that the realtime feed and the game-log processor keep filled.
-    /// A world this node already knows is answered from that local row and never
-    /// leaves the machine; only a miss (an unknown world, `force`, or `full`) resolves
-    /// through `worlds/{id}`. That is the same cache-first read model cloud and the
-    /// desktop command expose, not a VRChat passthrough.
-    ///
-    /// It returns the desktop's `VrchatResponse { status, data }` envelope so the phone
-    /// UI parses one shape whichever host answered.
-    pub async fn world_get(
-        &self,
-        world_id: &str,
-        force: bool,
-        full: bool,
-    ) -> vrcx_0_application_core::Result<vrcx_0_contracts::vrchat_api::VrchatResponse> {
-        let auth_scope = self.runtime_context.auth_scope.snapshot();
-        let endpoint = if auth_scope.endpoint.is_empty() {
-            VRCHAT_API_DEFAULT_ENDPOINT
-        } else {
-            auth_scope.endpoint.as_str()
-        };
-        self.runtime_context
-            .world_cache
-            .get(endpoint, world_id, force, full)
-            .await
-    }
 
-    /// The favourite-details runtime, assembled the way cloud's `favorite_details_runtime()` does.
-    ///
-    /// Callers hold onto the returned value (cloud keeps it in a `OnceLock`) because it carries the
-    /// per-card cache; building one per call would throw that away.
-    pub fn favorite_details_runtime(
-        &self,
-    ) -> vrcx_0_application::favorites::FavoriteDetailsRuntime {
-        let assembly = self.desktop_assembly();
-        vrcx_0_application::favorites::FavoriteDetailsRuntime::new(
-            Arc::new(vrcx_0_outbound_adapters::VrchatFavoriteRemote::new(
-                Arc::clone(self.web_client()),
-                assembly.diagnostics().clone(),
-                assembly.sync().clone(),
-                Arc::clone(assembly.world_cache()),
-            )),
-            assembly.auth_scope().clone(),
-            Arc::clone(assembly.world_cache()),
-            Arc::clone(assembly.avatar_cache()),
-            assembly.tasks().clone(),
-        )
-    }
 
-    /// The active auth scope, or a readable error when no session is signed in.
-    ///
-    /// The batch reads (favourite details) are scoped: answering from a scope-less state would
-    /// return another identity's data.
-    pub fn require_active_scope(
-        &self,
-        label: &str,
-    ) -> vrcx_0_application_core::Result<vrcx_0_application_core::RuntimeAuthScopeSnapshot> {
-        let scope = self.runtime_context.auth_scope.snapshot();
-        if scope.active && !scope.current_user_id.trim().is_empty() {
-            Ok(scope)
-        } else {
-            Err(vrcx_0_application_core::Error::Custom(format!(
-                "{label} requires an authenticated session."
-            )))
-        }
-    }
 
-    /// Metadata for a file, by id or by its full URL.
-    ///
-    /// Mirrors the desktop host's `file_metadata_get`: the URL is reduced to its file id, then the
-    /// file cache answers (it knows which ids it has already resolved). `None` means "not cached",
-    /// not "not found" - the caller decides whether to fetch.
-    pub async fn file_metadata_get(
-        &self,
-        file_url_or_id: String,
-    ) -> Option<vrcx_0_contracts::FileMetadataOutput> {
-        let file_id = vrcx_0_core::files::extract_file_id(&file_url_or_id)?;
-        let auth_scope = self.runtime_context.auth_scope.snapshot();
-        self.runtime_context
-            .file_cache()
-            .resolve(&auth_scope.endpoint, &file_id)
-            .await
-    }
 
-    /// Marks notifications as seen, locally and then remotely.
-    ///
-    /// Cloud's `mark_notifications_seen_batch`: the local rows are committed first, then the remote
-    /// calls run with retries, so a network failure leaves the local state correct. The authenticated
-    /// mutation context is what enforces "signed in" and detects a session swap mid-batch.
-    pub async fn mark_notifications_seen_batch(
-        &self,
-        input: vrcx_0_application::social::NotificationMarkSeenBatchInput,
-    ) -> vrcx_0_application_core::Result<
-        vrcx_0_application::social::NotificationMarkSeenBatchResult,
-    > {
-        let mutation = vrcx_0_application_core::AuthenticatedMutationContext::capture(
-            &self.runtime_context.auth_scope,
-            &self.runtime_context.remote_mutations,
-            "Batch action",
-        )?;
-        let actions = vrcx_0_outbound_adapters::LocalNotificationMarkSeenActions::new(
-            self.runtime_context.db.as_ref(),
-            self.runtime_context.web.as_ref(),
-            mutation,
-        );
-        vrcx_0_application::social::mark_notifications_seen_batch(&actions, input).await
-    }
 
-    /// The dependencies the group API functions take.
-    ///
-    /// Mirrors the desktop host's `api_deps()`: the same request adapter over this host's web
-    /// client, plus diagnostics/sync/scope/mutation gate from the desktop assembly.
-    fn group_api_deps(&self) -> vrcx_0_application::social::GroupApiDeps {
-        let assembly = self.desktop_assembly();
-        vrcx_0_application::social::GroupApiDeps::new(
-            Arc::new(vrcx_0_outbound_adapters::VrchatRequestAdapter::new(
-                Arc::clone(self.web_client()),
-            )),
-            assembly.diagnostics().clone(),
-            assembly.sync().clone(),
-            assembly.auth_scope().clone(),
-            Arc::clone(&self.runtime_context.remote_mutations),
-        )
-    }
 
-    /// A page of group posts (`GET groups/{id}/posts`).
-    pub async fn group_posts(
-        &self,
-        input: vrcx_0_application::social::VrchatGroupPagedInput,
-    ) -> vrcx_0_application_core::Result<vrcx_0_contracts::vrchat_api::VrchatResponse> {
-        vrcx_0_application::social::get_posts(self.group_api_deps(), input).await
-    }
 
-    /// The images of one group gallery (`GET groups/{id}/galleries/{galleryId}`).
-    pub async fn group_gallery(
-        &self,
-        input: vrcx_0_application::social::VrchatGroupGalleryInput,
-    ) -> vrcx_0_application_core::Result<vrcx_0_contracts::vrchat_api::VrchatResponse> {
-        vrcx_0_application::social::get_gallery(self.group_api_deps(), input).await
-    }
 
-    /// VRCX's recorded sessions: where the owner was, when, how long and with whom.
-    ///
-    /// The group instances a user is in (`GET users/{id}/instances/groups`).
-    pub async fn group_user_instances(
-        &self,
-        input: vrcx_0_application::social::VrchatGroupUserGroupsInput,
-    ) -> vrcx_0_application_core::Result<vrcx_0_contracts::vrchat_api::VrchatResponse> {
-        vrcx_0_application::social::get_user_instances(self.group_api_deps(), input).await
-    }
 
-    /// Every stored config entry, key and value as written.
-    ///
-    /// This is how a host reports settings it does not model as commands of its own - the sync
-    /// connection among them, which lives in `config:remoteSync.*`.
-    pub async fn config_list_values(
-        &self,
-    ) -> vrcx_0_application_core::Result<Vec<vrcx_0_contracts::ConfigReadEntry>>
-    {
-        let db = Arc::clone(&self.runtime_context.db);
-        tokio::task::spawn_blocking(move || vrcx_0_persistence::config::config_list_values(&db))
-            .await
-            .map_err(|error| {
-                vrcx_0_application_core::Error::Custom(format!("config list task failed: {error}"))
-            })?
-            .map_err(|error| vrcx_0_application_core::Error::Custom(error.to_string()))
-    }
 
-    /// Writes config entries.
-    ///
-    /// The pair of `config_list_values`; together they are what lets a client change a setting that
-    /// the host only stores, such as the sync target.
-    pub async fn config_set_values(
-        &self,
-        entries: Vec<vrcx_0_contracts::ConfigWriteEntry>,
-    ) -> vrcx_0_application_core::Result<()> {
-        let db = Arc::clone(&self.runtime_context.db);
-        tokio::task::spawn_blocking(move || vrcx_0_persistence::config::config_set_values(&db, entries))
-            .await
-            .map_err(|error| {
-                vrcx_0_application_core::Error::Custom(format!("config set task failed: {error}"))
-            })?
-            .map_err(|error| vrcx_0_application_core::Error::Custom(error.to_string()))
-    }
 
-    /// Deletes one config entry, returning how many rows went away.
-    ///
-    /// The third of the config trio the desktop exposes; without it a client can write a value but
-    /// never unset one.
-    pub async fn config_remove_value(
-        &self,
-        key: String,
-    ) -> vrcx_0_application_core::Result<i64> {
-        let db = Arc::clone(&self.runtime_context.db);
-        tokio::task::spawn_blocking(move || vrcx_0_persistence::config::config_remove_value(&db, key))
-            .await
-            .map_err(|error| {
-                vrcx_0_application_core::Error::Custom(format!("config remove task failed: {error}"))
-            })?
-            .map_err(|error| vrcx_0_application_core::Error::Custom(error.to_string()))
-    }
 
     /// Re-reads the sync config and restarts the engine with it.
     pub async fn remote_sync_restart(        &self,
