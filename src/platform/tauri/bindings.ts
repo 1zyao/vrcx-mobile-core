@@ -721,6 +721,12 @@ export const commands = {
     syncStatus: () => __TAURI_INVOKE<SyncStatusSnapshot>('sync__status'),
     syncTriggerNow: () =>
         __TAURI_INVOKE<SyncStatusSnapshot>('sync__trigger_now'),
+    /**
+     *  Forget one device's presence row. Only offline machines should be offered in
+     *  the UI; this device's own row is refused by the engine.
+     */
+    syncForgetDevice: (deviceId: string) =>
+        __TAURI_INVOKE<SyncStatusSnapshot>('sync__forget_device', { deviceId }),
     syncBootstrapProgress: () =>
         __TAURI_INVOKE<SyncBootstrapProgress>('sync__bootstrap_progress'),
     appConfigListValues: () =>
@@ -7776,6 +7782,12 @@ export type SyncDeviceRecord = {
      *  failures) and never blocks a healthy peer.
      */
     health?: number;
+    /**
+     *  Why the device reported that score (`healthy`, `websocketUnstable`,
+     *  `authExpired`, `syncFailing`, `recovering`). Lets peers explain a
+     *  zero-health row instead of just showing a number.
+     */
+    healthReason?: string;
     /**  Server-captured client address (PostgreSQL inet_client_addr). */
     ipAddr?: string;
     /**  Server-clock timestamp of the device's last heartbeat (per cycle). */

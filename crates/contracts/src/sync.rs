@@ -770,6 +770,11 @@ pub struct SyncDeviceRecord {
     /// failures) and never blocks a healthy peer.
     #[serde(default)]
     pub health: i32,
+    /// Why the device reported that score (`healthy`, `websocketUnstable`,
+    /// `authExpired`, `syncFailing`, `recovering`). Lets peers explain a
+    /// zero-health row instead of just showing a number.
+    #[serde(default)]
+    pub health_reason: String,
     /// Server-captured client address (PostgreSQL inet_client_addr).
     #[serde(default)]
     pub ip_addr: String,

@@ -328,6 +328,7 @@ pub fn builder() -> Builder<tauri::Wry> {
             commands::local::sync::sync__test_connection,
             commands::local::sync::sync__status,
             commands::local::sync::sync__trigger_now,
+            commands::local::sync::sync__forget_device,
             commands::local::sync::sync__bootstrap_progress,
             commands::local::config::app__config_list_values,
             commands::local::config::app__config_remove_value,

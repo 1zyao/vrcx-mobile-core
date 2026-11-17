@@ -175,6 +175,17 @@ impl RemoteSyncHost {
     }
 
     /// Stop the engine and uninstall local capture.
+    /// Forget one device's presence row (offline machines that are gone).
+    pub async fn forget_device(&self, device_id: &str) -> Result<bool> {
+        let Some(engine) = self.current() else {
+            return Ok(false);
+        };
+        engine
+            .forget_device(device_id)
+            .await
+            .map_err(|error| crate::error::Error::custom(error.to_string()))
+    }
+
     pub fn stop(&self) -> Result<()> {
         if let Ok(mut guard) = self.engine.write() {
             if let Some(existing) = guard.take() {
