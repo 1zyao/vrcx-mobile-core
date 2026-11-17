@@ -625,6 +625,30 @@ struct AvatarGetArgs {
     avatar_id: String,
 }
 
+async fn app__vrchat_avatar_select(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<AvatarGetArgs>,
+) -> Result<serde_json::Value, CommandError> {
+    let response = state
+        .vrchat_remote()
+        .avatar_select(args.input.avatar_id)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+async fn app__vrchat_avatar_select_fallback(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<AvatarGetArgs>,
+) -> Result<serde_json::Value, CommandError> {
+    let response = state
+        .vrchat_remote()
+        .avatar_select_fallback(args.input.avatar_id)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
 async fn app__vrchat_avatar_get(
     state: Arc<RuntimeHostState>,
     args: InputArgs<AvatarGetArgs>,
@@ -940,6 +964,14 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         app__vrchat_search_worlds_get,
     );
     registry.register_typed::<InputArgs<AvatarGetArgs>, serde_json::Value, _, _>(
+        "app__vrchat_avatar_select",
+        app__vrchat_avatar_select,
+    );
+    registry.register_typed::<InputArgs<AvatarGetArgs>, serde_json::Value, _, _>(
+        "app__vrchat_avatar_select_fallback",
+        app__vrchat_avatar_select_fallback,
+    );
+    registry.register_typed::<InputArgs<AvatarGetArgs>, serde_json::Value, _, _>(
         "app__vrchat_avatar_get",
         app__vrchat_avatar_get,
     );
@@ -1119,7 +1151,7 @@ mod tests {
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 50);
+        assert_eq!(registry.len(), 52);
     }
 }
 
@@ -1259,6 +1291,7 @@ async fn app__favorite_list(
     .map_err(|error| CommandError::failed(error.to_string()))?;
     Ok(rows)
 }
+
 
 
 

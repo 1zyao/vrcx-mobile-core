@@ -446,6 +446,41 @@ impl VrchatRemoteFacade {
         .await
     }
 
+    /// Wears an avatar (`PUT avatars/{id}/select`).
+    ///
+    /// Cloud reaches this through its avatars service; that service is not on this host, so the
+    /// protocol builder is wrapped here. Reversible by selecting another avatar, and it changes
+    /// nothing but the signed-in account's own current avatar.
+    pub async fn avatar_select(&self, avatar_id: String) -> Result<VrchatResponse> {
+        let (avatar_id, request) = vrcx_0_vrchat_protocol::avatars::avatar_select_input(
+            VRCHAT_API_DEFAULT_ENDPOINT.into(),
+            avatar_id,
+        )?;
+        self.execute(
+            "app__vrchat_avatar_select",
+            format!("Selecting avatar {avatar_id}."),
+            request,
+            VrchatScope::Vrchat,
+        )
+        .await
+    }
+
+    /// Sets the fallback avatar (`PUT avatars/{id}/selectFallback`).
+    pub async fn avatar_select_fallback(&self, avatar_id: String) -> Result<VrchatResponse> {
+        let (avatar_id, request) =
+            vrcx_0_vrchat_protocol::avatars::avatar_select_fallback_input(
+                VRCHAT_API_DEFAULT_ENDPOINT.into(),
+                avatar_id,
+            )?;
+        self.execute(
+            "app__vrchat_avatar_select_fallback",
+            format!("Selecting fallback avatar {avatar_id}."),
+            request,
+            VrchatScope::Vrchat,
+        )
+        .await
+    }
+
     /// One avatar by id (`GET avatars/{id}`).
     ///
     /// Cloud has no command for this exact read: its `app__avatar_get` is a *local* cache read,
