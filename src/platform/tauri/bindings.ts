@@ -7776,6 +7776,12 @@ export type SyncDeviceRecord = {
      *  failures) and never blocks a healthy peer.
      */
     health?: number;
+    /**
+     *  Why the device reported that score (`healthy`, `websocketUnstable`,
+     *  `authExpired`, `syncFailing`, `recovering`). Lets peers explain a
+     *  zero-health row instead of just showing a number.
+     */
+    healthReason?: string;
     /**  Server-captured client address (PostgreSQL inet_client_addr). */
     ipAddr?: string;
     /**  Server-clock timestamp of the device's last heartbeat (per cycle). */

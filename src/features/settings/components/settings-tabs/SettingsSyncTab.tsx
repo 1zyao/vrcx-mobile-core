@@ -334,6 +334,18 @@ export function SettingsSyncTab() {
         ? status.remoteDevices.filter((device) => device.online)
         : [];
 
+    // The list shows every known device, online first: a machine that is simply
+    // switched off still explains why it is not the writer. Stale rows linger in
+    // the presence table, so ordering keeps them at the bottom.
+    const allDevices = status
+        ? [...status.remoteDevices].sort(
+              (a, b) =>
+                  Number(b.online ?? false) - Number(a.online ?? false) ||
+                  collectorRank(b) - collectorRank(a) ||
+                  a.deviceId.localeCompare(b.deviceId)
+          )
+        : [];
+
     // Who records live feed right now: the online device with the highest
     // collector priority, ties broken by the smallest device id. Mirrors
     // `collector_election::blockers` on the Rust side, so the badge matches what
@@ -798,7 +810,7 @@ export function SettingsSyncTab() {
                             <BootstrapProgressView progress={bootstrap} />
                         ) : null}
 
-                        {onlineDevices.length > 0 ? (
+                        {allDevices.length > 0 ? (
                             <div>
                                 <p className="mb-2 flex items-center gap-1.5 text-xs font-medium">
                                     <LaptopIcon className="size-3.5" />
@@ -819,7 +831,7 @@ export function SettingsSyncTab() {
                                           )}
                                 </p>
                                 <ul className="flex flex-col gap-1.5">
-                                    {onlineDevices.map((device) => {
+                                    {allDevices.map((device) => {
                                         const isSelf =
                                             device.deviceId === status.deviceId;
                                         return (
@@ -893,9 +905,17 @@ export function SettingsSyncTab() {
                                                     )}{' '}
                                                     {deviceHealth(device)}
                                                 </Badge>
-                                                {!writerDeviceIds.has(
-                                                    device.deviceId
-                                                ) ? (
+                                                {!device.online ? null : deviceHealth(
+                                                      device
+                                                  ) <= 0 ? (
+                                                    <span className="text-destructive shrink-0 text-[10px]">
+                                                        {healthReasonLabel(
+                                                            device.healthReason
+                                                        )}
+                                                    </span>
+                                                ) : !writerDeviceIds.has(
+                                                      device.deviceId
+                                                  ) ? (
                                                     <span className="text-muted-foreground shrink-0 text-[10px]">
                                                         {t(
                                                             'view.settings.sync.status.health_yielded'
@@ -910,14 +930,25 @@ export function SettingsSyncTab() {
                                                     <DeviceSeenLabel
                                                         device={device}
                                                     />
-                                                    <Badge
-                                                        variant="secondary"
-                                                        className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
-                                                    >
-                                                        {t(
-                                                            'view.settings.sync.status.device_online'
-                                                        )}
-                                                    </Badge>
+                                                    {device.online ? (
+                                                        <Badge
+                                                            variant="secondary"
+                                                            className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                                                        >
+                                                            {t(
+                                                                'view.settings.sync.status.device_online'
+                                                            )}
+                                                        </Badge>
+                                                    ) : (
+                                                        <Badge
+                                                            variant="secondary"
+                                                            className="text-muted-foreground/70 bg-muted/40"
+                                                        >
+                                                            {t(
+                                                                'view.settings.sync.status.device_offline'
+                                                            )}
+                                                        </Badge>
+                                                    )}
                                                 </span>
                                             </li>
                                         );

@@ -386,6 +386,7 @@ impl RemoteSyncEngine {
     async fn cycle_inner(self: &Arc<Self>) -> EngineResult<CycleCounts> {
         self.reconcile_remote_epoch().await?;
 
+        let health = vrcx_0_contracts::collector_health::snapshot();
         // Register presence so other devices can list us, and advertise the
         // collector role the election reads back. `off` means "do not take
         // part": staying out of the registry is what keeps a machine from
@@ -400,7 +401,8 @@ impl RemoteSyncEngine {
                     device_name: self.device_name.clone(),
                     role: collector_role,
                     priority: self.collector_priority(),
-                    health: vrcx_0_contracts::collector_health::snapshot().score as i32,
+                    health: health.score as i32,
+                    health_reason: health.reason.to_string(),
                     ..SyncDeviceRecord::default()
                 })
                 .await;
