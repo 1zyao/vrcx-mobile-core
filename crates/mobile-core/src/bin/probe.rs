@@ -36,7 +36,7 @@ async fn main() -> ExitCode {
         .and_then(|value| value.parse().ok())
         .unwrap_or(8100);
 
-    let state = match vrcx_0_mobile::host::build_host(&PathBuf::from(data_dir), "probe") {
+    let state = match vrcx_0_mobile_core::host::build_host(&PathBuf::from(data_dir), "probe") {
         Ok(state) => std::sync::Arc::new(state),
         Err(error) => {
             eprintln!("probe: cannot build host: {error}");

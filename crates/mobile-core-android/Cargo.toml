@@ -1,0 +1,19 @@
+[package]
+name = "vrcx-0-mobile-android"
+version = "0.1.0"
+edition = "2021"
+license.workspace = true
+description = "Android JNI entry point for the phone core"
+
+# The shared library Android loads must keep this name: Kotlin calls
+# System.loadLibrary("vrcx_0_mobile").
+[lib]
+name = "vrcx_0_mobile"
+crate-type = ["cdylib"]
+
+[dependencies]
+serde_json = { workspace = true }
+vrcx-0-mobile-core = { path = "../mobile-core" }
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21"

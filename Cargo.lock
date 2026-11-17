@@ -10111,10 +10111,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "vrcx-0-mobile-core"
+name = "vrcx-0-mobile-android"
 version = "0.1.0"
 dependencies = [
  "jni 0.21.1",
+ "serde_json",
+ "vrcx-0-mobile-core",
+]
+
+[[package]]
+name = "vrcx-0-mobile-core"
+version = "0.1.0"
+dependencies = [
  "serde",
  "serde_json",
  "tokio",

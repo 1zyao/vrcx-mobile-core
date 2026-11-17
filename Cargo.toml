@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/mobile-core",
+    "crates/mobile-core-android",
     "crates/mobile-host",
     "crates/command-server",
     "src-tauri",

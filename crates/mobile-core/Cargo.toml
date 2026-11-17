@@ -10,8 +10,7 @@ name = "vrcx-0-mobile-probe"
 path = "src/bin/probe.rs"
 
 [lib]
-name = "vrcx_0_mobile"
-crate-type = ["cdylib", "staticlib", "rlib"]
+crate-type = ["staticlib", "rlib"]
 
 [dependencies]
 serde = { workspace = true, features = ["derive"] }
@@ -25,8 +24,6 @@ vrcx-0-local-server = { path = "../local-server" }
 vrcx-0-mobile-host = { path = "../mobile-host" }
 vrcx-0-platform = { path = "../platform" }
 
-[target.'cfg(target_os = "android")'.dependencies]
-jni = "0.21"
 
 
 
