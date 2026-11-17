@@ -1110,26 +1110,6 @@ impl RuntimeHostState {
 
     /// VRCX's recorded sessions: where the owner was, when, how long and with whom.
     ///
-    /// This is a read of the local game log, which is what makes the phone's history VRCX's own
-    /// recording rather than VRChat's `/worlds/recent`. It runs on the blocking pool because the
-    /// query touches SQLite.
-    pub async fn game_log_sessions_query(
-        &self,
-        input: vrcx_0_application_game::GameLogSessionsQueryInput,
-    ) -> vrcx_0_application_core::Result<Vec<vrcx_0_application_game::GameLogSessionDto>> {
-        let store = crate::state::game_log_sessions::PersistenceSessionStore::new(Arc::clone(
-            &self.runtime_context.db,
-        ));
-        let owner = vrcx_0_core::OwnerId::new(self.runtime_context.auth_scope.snapshot().current_user_id);
-        tokio::task::spawn_blocking(move || {
-            vrcx_0_application_game::game_log_sessions_query(&store, &owner, input)
-        })
-        .await
-        .map_err(|error| {
-            vrcx_0_application_core::Error::Custom(format!("game log query task failed: {error}"))
-        })?
-    }
-
     /// The group instances a user is in (`GET users/{id}/instances/groups`).
     pub async fn group_user_instances(
         &self,

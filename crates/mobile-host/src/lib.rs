@@ -10,6 +10,8 @@
 
 use std::sync::Arc;
 
+mod instance_history;
+
 use vrcx_0_command_server::{CommandBus, CommandError, CommandRegistry, EventBus};
 use vrcx_0_composition::RuntimeHostState;
 use vrcx_0_application::auth::{
@@ -505,12 +507,15 @@ async fn sync__configure(
     serde_json::to_value(status).map_err(|error| CommandError::failed(error.to_string()))
 }
 
-async fn app__game_log_sessions_query(
+/// Room history: the same upstream command the desktop's 房间历史 page calls.
+///
+/// Takes `input` like upstream (`app__instance_history_query(input: …)`), so the wire shape is
+/// `{"input": {...}}` and a client written against the desktop works unchanged.
+async fn app__instance_history_query(
     state: Arc<RuntimeHostState>,
-    args: InputArgs<vrcx_0_application_game::GameLogSessionsQueryInput>,
-) -> Result<Vec<vrcx_0_application_game::GameLogSessionDto>, CommandError> {
-    state
-        .game_log_sessions_query(args.input)
+    args: InputArgs<vrcx_0_application_game::InstanceHistoryQueryInput>,
+) -> Result<Vec<vrcx_0_application_game::InstanceHistoryEntryOutput>, CommandError> {
+    instance_history::instance_history_query_command(&state, args.input)
         .await
         .map_err(|error| CommandError::failed(error.to_string()))
 }
@@ -1107,11 +1112,11 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         sync__configure,
     );
     registry.register_typed::<
-        InputArgs<vrcx_0_application_game::GameLogSessionsQueryInput>,
-        Vec<vrcx_0_application_game::GameLogSessionDto>,
+        InputArgs<vrcx_0_application_game::InstanceHistoryQueryInput>,
+        Vec<vrcx_0_application_game::InstanceHistoryEntryOutput>,
         _,
         _,
-    >("app__game_log_sessions_query", app__game_log_sessions_query);
+    >("app__instance_history_query", app__instance_history_query);
     registry.register_typed::<serde_json::Value, serde_json::Value, _, _>(
         "app__vrchat_avatar_styles_get",
         app__vrchat_avatar_styles_get,
