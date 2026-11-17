@@ -1135,5 +1135,51 @@ impl RuntimeHostState {
     ) -> vrcx_0_application_core::Result<vrcx_0_contracts::vrchat_api::VrchatResponse> {
         vrcx_0_application::social::get_user_instances(self.group_api_deps(), input).await
     }
+
+    /// Every stored config entry, key and value as written.
+    ///
+    /// This is how a host reports settings it does not model as commands of its own - the sync
+    /// connection among them, which lives in `config:remoteSync.*`.
+    pub async fn config_list_values(
+        &self,
+    ) -> vrcx_0_application_core::Result<Vec<vrcx_0_contracts::ConfigReadEntry>>
+    {
+        let db = Arc::clone(&self.runtime_context.db);
+        tokio::task::spawn_blocking(move || vrcx_0_persistence::config::config_list_values(&db))
+            .await
+            .map_err(|error| {
+                vrcx_0_application_core::Error::Custom(format!("config list task failed: {error}"))
+            })?
+            .map_err(|error| vrcx_0_application_core::Error::Custom(error.to_string()))
+    }
+
+    /// Writes config entries.
+    ///
+    /// The pair of `config_list_values`; together they are what lets a client change a setting that
+    /// the host only stores, such as the sync target.
+    pub async fn config_set_values(
+        &self,
+        entries: Vec<vrcx_0_contracts::ConfigWriteEntry>,
+    ) -> vrcx_0_application_core::Result<()> {
+        let db = Arc::clone(&self.runtime_context.db);
+        tokio::task::spawn_blocking(move || vrcx_0_persistence::config::config_set_values(&db, entries))
+            .await
+            .map_err(|error| {
+                vrcx_0_application_core::Error::Custom(format!("config set task failed: {error}"))
+            })?
+            .map_err(|error| vrcx_0_application_core::Error::Custom(error.to_string()))
+    }
+
+    /// Re-reads the sync config and restarts the engine with it.
+    pub async fn remote_sync_restart(
+        &self,
+    ) -> vrcx_0_application_core::Result<()> {
+        self.remote_sync_host
+            .restart_from_config()
+            .await
+            .map(|_| ())
+            .map_err(|error| vrcx_0_application_core::Error::Custom(error.to_string()))
+    }
 }
+
 

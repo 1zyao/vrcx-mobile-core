@@ -359,6 +359,115 @@ async fn app__vrchat_auth_auto_login_start(
 /// The request itself is built by `VrchatRemoteFacade::avatar_styles`
 /// (crates/application/src/remote/vrchat_facade.rs), so the endpoint path, method and
 /// scope are not duplicated here.
+async fn app__config_list_values(
+    state: Arc<RuntimeHostState>,
+    _args: serde_json::Value,
+) -> Result<Vec<vrcx_0_contracts::ConfigReadEntry>, CommandError> {
+    state
+        .config_list_values()
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ConfigSetArgs {
+    #[serde(default)]
+    entries: Vec<vrcx_0_contracts::ConfigWriteEntry>,
+}
+
+async fn app__config_set_values(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<ConfigSetArgs>,
+) -> Result<serde_json::Value, CommandError> {
+    state
+        .config_set_values(args.input.entries)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    Ok(serde_json::Value::Null)
+}
+
+/// Cloud's `sync__configure`: writes `remoteSync.*` config entries, then restarts the engine.
+///
+/// The wire shape is cloud's own - flat `enabled` / `intervalSec` / `connection` on the args, not
+/// wrapped in `input` - so a client written against cloud works here unchanged.
+#[derive(serde::Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct SyncConfigureArgs {
+    #[serde(default)]
+    enabled: Option<bool>,
+    #[serde(default)]
+    interval_sec: Option<i64>,
+    #[serde(default)]
+    connection: Option<vrcx_0_contracts::sync::SyncConnectionInput>,
+    /// Cloud reads this from the args but never writes it. Kept here because VRCX's own settings
+    /// page sends it, and silently dropping it would make that field a lie.
+    #[serde(default)]
+    collector_priority: Option<i64>,
+}
+
+async fn sync__configure(
+    state: Arc<RuntimeHostState>,
+    args: serde_json::Value,
+) -> Result<serde_json::Value, CommandError> {
+    let input: SyncConfigureArgs = serde_json::from_value(args)
+        .map_err(|error| CommandError::bad_request(format!("invalid sync config: {error}")))?;
+
+    // Values are written raw, the way the desktop does it (`config_entry(key, value: impl
+    // Display)`): a JSON string would be stored with its quotes, and `"host"` is not a host. I had
+    // this wrong first and it wrote `"100.70.120.64"` into the config, which broke the next cycle
+    // with "PostgreSQL connect failed".
+    let mut entries: Vec<vrcx_0_contracts::ConfigWriteEntry> = Vec::new();
+    let mut push = |key: &str, value: String| {
+        entries.push(vrcx_0_contracts::ConfigWriteEntry {
+            key: key.to_string(),
+            value,
+        });
+    };
+    if let Some(enabled) = input.enabled {
+        push("remoteSync.enabled", enabled.to_string());
+    }
+    if let Some(fields) = input.connection {
+        push("remoteSync.host", fields.host.trim().to_string());
+        if (1..65536).contains(&fields.port) {
+            push("remoteSync.port", fields.port.to_string());
+        }
+        push("remoteSync.user", fields.user.trim().to_string());
+        if let Some(password) = fields.password {
+            if !password.trim().is_empty() {
+                push("remoteSync.password", password.trim().to_string());
+            }
+        }
+        push("remoteSync.database", fields.database.trim().to_string());
+        push("remoteSync.tlsVerify", fields.tls_verify.to_string());
+        push(
+            "remoteSync.allowPlaintext",
+            fields.allow_plaintext.to_string(),
+        );
+    }
+    if let Some(interval) = input.interval_sec {
+        push("remoteSync.intervalSec", interval.max(5).to_string());
+    }
+    if let Some(priority) = input.collector_priority {
+        push(
+            "remoteSync.collectorPriority",
+            priority.clamp(0, 100).to_string(),
+        );
+    }
+    if !entries.is_empty() {
+        state
+            .config_set_values(entries)
+            .await
+            .map_err(|error| CommandError::failed(error.to_string()))?;
+        state
+            .remote_sync_restart()
+            .await
+            .map_err(|error| CommandError::failed(error.to_string()))?;
+    }
+    let status = state.remote_sync().status().await;
+    serde_json::to_value(status).map_err(|error| CommandError::failed(error.to_string()))
+}
+
 async fn app__game_log_sessions_query(
     state: Arc<RuntimeHostState>,
     args: InputArgs<vrcx_0_application_game::GameLogSessionsQueryInput>,
@@ -944,6 +1053,18 @@ async fn app__social_friend_roster_baseline_get(
 /// The command surface exposed to the phone UI.
 pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
     let mut registry = CommandRegistry::new();
+    registry.register_typed::<serde_json::Value, Vec<vrcx_0_contracts::ConfigReadEntry>, _, _>(
+        "app__config_list_values",
+        app__config_list_values,
+    );
+    registry.register_typed::<InputArgs<ConfigSetArgs>, serde_json::Value, _, _>(
+        "app__config_set_values",
+        app__config_set_values,
+    );
+    registry.register_typed::<serde_json::Value, serde_json::Value, _, _>(
+        "sync__configure",
+        sync__configure,
+    );
     registry.register_typed::<
         InputArgs<vrcx_0_application_game::GameLogSessionsQueryInput>,
         Vec<vrcx_0_application_game::GameLogSessionDto>,
@@ -1263,7 +1384,7 @@ mod tests {
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 57);
+        assert_eq!(registry.len(), 60);
     }
 }
 
@@ -1403,6 +1524,9 @@ async fn app__favorite_list(
     .map_err(|error| CommandError::failed(error.to_string()))?;
     Ok(rows)
 }
+
+
+
 
 
 
