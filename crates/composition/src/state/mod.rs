@@ -21,6 +21,7 @@ mod background_ticks;
 mod capabilities;
 mod combined_snapshot;
 mod frontend_session;
+mod game_log_sessions;
 mod profile_lock;
 mod remote_sync;
 mod runtime_host_state;
@@ -93,3 +94,4 @@ mod web_ua_tests {
         assert_eq!(unique.len(), jobs.len());
     }
 }
+

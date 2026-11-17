@@ -359,6 +359,16 @@ async fn app__vrchat_auth_auto_login_start(
 /// The request itself is built by `VrchatRemoteFacade::avatar_styles`
 /// (crates/application/src/remote/vrchat_facade.rs), so the endpoint path, method and
 /// scope are not duplicated here.
+async fn app__game_log_sessions_query(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<vrcx_0_application_game::GameLogSessionsQueryInput>,
+) -> Result<Vec<vrcx_0_application_game::GameLogSessionDto>, CommandError> {
+    state
+        .game_log_sessions_query(args.input)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))
+}
+
 async fn app__vrchat_avatar_styles_get(
     state: Arc<RuntimeHostState>,
     _args: serde_json::Value,
@@ -820,6 +830,12 @@ async fn app__social_friend_roster_baseline_get(
 /// The command surface exposed to the phone UI.
 pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
     let mut registry = CommandRegistry::new();
+    registry.register_typed::<
+        InputArgs<vrcx_0_application_game::GameLogSessionsQueryInput>,
+        Vec<vrcx_0_application_game::GameLogSessionDto>,
+        _,
+        _,
+    >("app__game_log_sessions_query", app__game_log_sessions_query);
     registry.register_typed::<serde_json::Value, serde_json::Value, _, _>(
         "app__vrchat_avatar_styles_get",
         app__vrchat_avatar_styles_get,
@@ -1103,7 +1119,7 @@ mod tests {
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 49);
+        assert_eq!(registry.len(), 50);
     }
 }
 
@@ -1243,6 +1259,7 @@ async fn app__favorite_list(
     .map_err(|error| CommandError::failed(error.to_string()))?;
     Ok(rows)
 }
+
 
 
 
