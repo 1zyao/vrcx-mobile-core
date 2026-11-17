@@ -899,6 +899,17 @@ impl RemoteSyncStore for PostgresSyncStore {
         .await
     }
 
+    async fn devices_delete(&self, device_id: &str) -> SyncStoreResult<bool> {
+        self.with_client(|client| async move {
+            let removed = client
+                .execute("DELETE FROM _sync_devices WHERE device_id = $1", &[&device_id])
+                .await
+                .map_err(pg_error)?;
+            Ok((removed > 0, client))
+        })
+        .await
+    }
+
     async fn ops_gc(&self, retain_days: i64) -> SyncStoreResult<u64> {
         // make_interval's named args are int4; an i64 bind fails client-side
         // type checks ("error serializing parameter 0").

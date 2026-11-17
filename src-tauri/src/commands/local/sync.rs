@@ -115,6 +115,23 @@ pub async fn sync__status(state: State<'_, AppState>) -> Result<SyncStatusSnapsh
     Ok(state.runtime_host().remote_sync().status().await)
 }
 
+/// Forget one device's presence row. Only offline machines should be offered in
+/// the UI; this device's own row is refused by the engine.
+#[tauri::command(async)]
+#[specta::specta]
+pub async fn sync__forget_device(
+    state: State<'_, AppState>,
+    deviceId: String,
+) -> Result<SyncStatusSnapshot, AppError> {
+    state
+        .runtime_host()
+        .remote_sync()
+        .forget_device(&deviceId)
+        .await
+        .map_err(AppError::from)?;
+    Ok(state.runtime_host().remote_sync().status().await)
+}
+
 #[tauri::command(async)]
 #[specta::specta]
 pub async fn sync__trigger_now(state: State<'_, AppState>) -> Result<SyncStatusSnapshot, AppError> {

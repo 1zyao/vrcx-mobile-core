@@ -847,6 +847,19 @@ impl RemoteSyncEngine {
         Ok(())
     }
 
+    /// Remove a device's presence row. Refuses this device's own id: it would be
+    /// re-registered by the next cycle and only confuses the operator.
+    pub async fn forget_device(self: &Arc<Self>, device_id: &str) -> EngineResult<bool> {
+        let device_id = device_id.trim();
+        if device_id.is_empty() || device_id == self.handle.device_id() {
+            return Ok(false);
+        }
+        self.store
+            .devices_delete(device_id)
+            .await
+            .map_err(SyncEngineError::from)
+    }
+
     pub async fn status(self: &Arc<Self>) -> SyncStatusSnapshot {
         let (phase, last_error) = self.phase_snapshot();
 

@@ -721,6 +721,12 @@ export const commands = {
     syncStatus: () => __TAURI_INVOKE<SyncStatusSnapshot>('sync__status'),
     syncTriggerNow: () =>
         __TAURI_INVOKE<SyncStatusSnapshot>('sync__trigger_now'),
+    /**
+     *  Forget one device's presence row. Only offline machines should be offered in
+     *  the UI; this device's own row is refused by the engine.
+     */
+    syncForgetDevice: (deviceId: string) =>
+        __TAURI_INVOKE<SyncStatusSnapshot>('sync__forget_device', { deviceId }),
     syncBootstrapProgress: () =>
         __TAURI_INVOKE<SyncBootstrapProgress>('sync__bootstrap_progress'),
     appConfigListValues: () =>

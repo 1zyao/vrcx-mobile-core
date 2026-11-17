@@ -3310,6 +3310,7 @@
                     "devices": "Connected devices",
                     "device_online": "Online",
                     "device_offline": "Offline",
+                    "forget_device": "Forget this device",
                     "device_last_seen": "Last active",
                     "seen_seconds_ago": "{count}s ago",
                     "seen_minutes_ago": "{count}m ago",

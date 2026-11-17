@@ -43,6 +43,12 @@ export async function testSyncConnection(
     return commands.syncTestConnection(connection);
 }
 
+export async function forgetSyncDevice(
+    deviceId: string
+): Promise<SyncStatusSnapshot> {
+    return commands.syncForgetDevice(deviceId);
+}
+
 export async function triggerSyncNow(): Promise<SyncStatusSnapshot> {
     return commands.syncTriggerNow();
 }

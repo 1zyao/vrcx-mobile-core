@@ -3299,6 +3299,7 @@
                     "devices": "已連線的裝置",
                     "device_online": "線上",
                     "device_offline": "離線",
+                    "forget_device": "刪除這台裝置",
                     "device_last_seen": "最近活躍",
                     "seen_seconds_ago": "{count} 秒前",
                     "seen_minutes_ago": "{count} 分鐘前",

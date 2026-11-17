@@ -10,6 +10,7 @@ import {
     LaptopIcon,
     RefreshCwIcon,
     ShieldCheckIcon,
+    Trash2Icon,
     XCircleIcon
 } from 'lucide-react';
 import {
@@ -35,6 +36,7 @@ import {
     fetchSyncBootstrapProgress,
     fetchSyncConnection,
     fetchSyncStatus,
+    forgetSyncDevice,
     testSyncConnection,
     triggerSyncNow
 } from '@/repositories/syncRepository';
@@ -162,7 +164,9 @@ export function SettingsSyncTab() {
                 setTlsVerify(fields.tlsVerify);
                 setAllowPlaintext(fields.allowPlaintext);
                 setHasPassword(fields.hasPassword);
-                setCollectorPriority((fields.collectorPriority ?? 0).toString());
+                setCollectorPriority(
+                    (fields.collectorPriority ?? 0).toString()
+                );
                 if ((fields.intervalSeconds ?? 0) > 0) {
                     setIntervalSec(String(fields.intervalSeconds));
                 }
@@ -237,6 +241,20 @@ export function SettingsSyncTab() {
         }
     };
 
+    // Forget a device that is gone for good. Only offered for offline rows; the
+    // engine refuses this device's own id anyway.
+    const handleForgetDevice = async (deviceId: string) => {
+        try {
+            const snapshot = await forgetSyncDevice(deviceId);
+            setStatus(snapshot);
+        } catch (error) {
+            toast.add({
+                type: 'error',
+                title: String(error)
+            });
+        }
+    };
+
     const handleSave = async (nextEnabled: boolean) => {
         setSaving(true);
         try {
@@ -252,8 +270,7 @@ export function SettingsSyncTab() {
                     allowPlaintext
                 },
                 intervalSec: Number.parseInt(intervalSec, 10) || undefined,
-                collectorPriority:
-                    Number.parseInt(collectorPriority, 10) || 0
+                collectorPriority: Number.parseInt(collectorPriority, 10) || 0
             });
             setStatus(snapshot);
             setEnabled(snapshot.enabled);
@@ -521,8 +538,10 @@ export function SettingsSyncTab() {
                                 }
                                 onBlur={() =>
                                     setCollectorPriority((current) => {
-                                        const parsed =
-                                            Number.parseInt(current, 10);
+                                        const parsed = Number.parseInt(
+                                            current,
+                                            10
+                                        );
                                         if (!Number.isFinite(parsed)) {
                                             return '0';
                                         }
@@ -891,7 +910,8 @@ export function SettingsSyncTab() {
                                                     }
                                                     className="h-4 px-1.5 text-[10px]"
                                                     title={
-                                                        deviceHealth(device) <= 0
+                                                        deviceHealth(device) <=
+                                                        0
                                                             ? t(
                                                                   'view.settings.sync.status.health_unhealthy'
                                                               )
@@ -930,6 +950,24 @@ export function SettingsSyncTab() {
                                                     <DeviceSeenLabel
                                                         device={device}
                                                     />
+                                                    {!device.online &&
+                                                    !isSelf ? (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="text-muted-foreground hover:text-destructive size-6"
+                                                            title={t(
+                                                                'view.settings.sync.status.forget_device'
+                                                            )}
+                                                            onClick={() =>
+                                                                handleForgetDevice(
+                                                                    device.deviceId
+                                                                )
+                                                            }
+                                                        >
+                                                            <Trash2Icon className="size-3.5" />
+                                                        </Button>
+                                                    ) : null}
                                                     {device.online ? (
                                                         <Badge
                                                             variant="secondary"
@@ -963,8 +1001,6 @@ export function SettingsSyncTab() {
                     </p>
                 )}
             </SettingsCard>
-
-
         </SettingsTabContent>
     );
 }
