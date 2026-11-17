@@ -581,69 +581,13 @@ impl RuntimeHostContext {
 }
 
 impl RuntimeHostContext {
-    /// Login session runtime (password / 2FA / auto-login orchestration).
-    ///
-    /// Exposed so a non-desktop host (the phone core) can drive the login flow
-    /// over its command surface without re-implementing the credential store,
-    /// cookie jar or 2FA handling.
-    pub fn login_session_runtime(&self) -> &LoginSessionRuntime {
-        &self.login_session
-    }
 }
 
 impl RuntimeHostContext {
-    /// Starts a password / 2FA login attempt.
-    ///
-    /// Thin facade over `LoginSessionRuntime` so callers that do not own the
-    /// credential store, cookie jar or login API (the phone core, the headless
-    /// host) can drive login through one call.
-    pub async fn start_login_session(
-        &self,
-        input: vrcx_0_application::auth::LoginSessionStartInput,
-    ) -> vrcx_0_application::auth::LoginSessionState {
-        self.login_session
-            .start(
-                Arc::clone(&self.login_api),
-                self.auth_cookies.as_ref(),
-                self.auth_credentials.as_ref(),
-                input,
-                &|_| Ok(()),
-            )
-            .await
-    }
-
-    /// Abandons an in-flight login attempt.
-    pub async fn cancel_login_session(
-        &self,
-        attempt_id: String,
-    ) -> vrcx_0_application::auth::LoginSessionState {
-        self.login_session
-            .cancel(attempt_id, self.auth_cookies.as_ref(), &|_| Ok(()))
-            .await
-    }
-
 }
 
 
 impl RuntimeHostContext {
-    /// Answers a login challenge (2FA code, device approval, …).
-    ///
-    /// Uses `respond_and_transition` rather than `respond` because the latter is
-    /// `#[cfg(test)]` in the login session runtime; the state is returned, so the
-    /// UI never needs a separate phase query.
-    pub async fn respond_login_session(
-        &self,
-        input: vrcx_0_application::auth::LoginSessionRespondInput,
-    ) -> vrcx_0_application::auth::LoginSessionState {
-        self.login_session
-            .respond_and_transition(
-                input,
-                self.auth_cookies.as_ref(),
-                self.auth_credentials.as_ref(),
-                &|_| Ok(()),
-            )
-            .await
-    }
 }
 
 impl RuntimeHostContext {
@@ -660,22 +604,4 @@ impl RuntimeHostContext {
 }
 
 impl RuntimeHostContext {
-    /// Starts a login from stored credentials (session restore on launch).
-    ///
-    /// Unlike start/respond/cancel/end, the shared runtime host does not expose
-    /// this, so the facade is defined here for hosts that hold the context.
-    pub async fn auto_login_start(
-        &self,
-        input: vrcx_0_application::auth::AutoLoginStartInput,
-    ) -> vrcx_0_application_core::Result<vrcx_0_application::auth::AutoLoginOutcome> {
-        self.login_session
-            .auto_login_start(
-                Arc::clone(&self.login_api),
-                self.auth_cookies.as_ref(),
-                self.auth_credentials.as_ref(),
-                input,
-                &|_| Ok(()),
-            )
-            .await
-    }
 }
