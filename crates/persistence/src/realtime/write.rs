@@ -54,8 +54,15 @@ pub fn write_realtime_batch(
         for entry in &batch.friend_log_deletes {
             counts.add_realtime_rows(delete_friend_log_current(tx, &user_prefix, entry)?);
         }
-        for entry in &batch.feed_entries {
-            counts.add_realtime_rows(insert_feed_entry(tx, &user_prefix, entry)?);
+        // Only the elected collector records live feed observations. Other
+        // devices keep their VRChat websocket (and their UI) live but let the
+        // collector own the rows: `feed_*` is natural-keyed on a client-stamped
+        // `created_at`, so a second observer would insert a second, unmergeable
+        // row for the same friend event. See `vrcx_0_contracts::collector_gate`.
+        if vrcx_0_contracts::is_live_feed_collector() {
+            for entry in &batch.feed_entries {
+                counts.add_realtime_rows(insert_feed_entry(tx, &user_prefix, entry)?);
+            }
         }
         for entry in &batch.notification_v1_upserts {
             counts.add_realtime_rows(upsert_notification_v1(tx, &user_prefix, entry)?);

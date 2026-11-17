@@ -48,6 +48,10 @@ pub const CONFIG_INTERVAL_SEC: &str = "remoteSync.intervalSec";
 pub const CONFIG_RETAIN_DAYS: &str = "remoteSync.retainDays";
 pub const CONFIG_TLS_VERIFY: &str = "remoteSync.tlsVerify";
 pub const CONFIG_ALLOW_PLAINTEXT: &str = "remoteSync.allowPlaintext";
+/// Collector election role: `auto` (default) | `forced` | `off`.
+pub const CONFIG_COLLECTOR_ROLE: &str = "remoteSync.collector";
+/// Collector priority: higher wins the election; ties fall back to device id.
+pub const CONFIG_COLLECTOR_PRIORITY: &str = "remoteSync.collectorPriority";
 
 pub const DEFAULT_INTERVAL_SEC: u64 = 60;
 pub const DEFAULT_RETAIN_DAYS: i64 = 30;
@@ -334,19 +338,51 @@ impl RemoteSyncEngine {
         self.state.lock().unwrap().stats.clone()
     }
 
+    /// Normalized collector role for this device.
+    ///
+    /// `forced` never yields; `auto` yields to a fresh forced peer and to any
+    /// fresh auto peer with a smaller device id; `off` keeps this device out of
+    /// the device registry entirely so it cannot influence the election.
+    /// Configured collector priority (higher wins). Unparsable → 0.
+    pub fn collector_priority(&self) -> i32 {
+        let raw = vrcx_0_persistence::config::get_string(&self.db, CONFIG_COLLECTOR_PRIORITY, "")
+            .unwrap_or_default();
+        raw.trim().parse::<i32>().unwrap_or(0).clamp(-1000, 1000)
+    }
+
+    pub fn collector_role(&self) -> String {
+        let raw = vrcx_0_persistence::config::get_string(&self.db, CONFIG_COLLECTOR_ROLE, "")
+            .unwrap_or_default();
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "forced" | "true" | "1" | "yes" => {
+                vrcx_0_contracts::DEVICE_ROLE_FORCED.to_string()
+            }
+            "off" | "false" | "0" | "no" => "off".to_string(),
+            _ => vrcx_0_contracts::DEVICE_ROLE_AUTO.to_string(),
+        }
+    }
+
     async fn cycle_inner(self: &Arc<Self>) -> EngineResult<CycleCounts> {
         self.reconcile_remote_epoch().await?;
 
-        // Register presence so other devices can list us.
-        let _ = self
-            .store
-            .devices_upsert(&SyncDeviceRecord {
-                device_id: self.handle.device_id().to_string(),
-                app_version: self.app_version.clone(),
-                device_name: self.device_name.clone(),
-                ..SyncDeviceRecord::default()
-            })
-            .await;
+        // Register presence so other devices can list us, and advertise the
+        // collector role the election reads back. `off` means "do not take
+        // part": staying out of the registry is what keeps a machine from
+        // blocking (or being blocked by) the real collector.
+        let collector_role = self.collector_role();
+        if collector_role != "off" {
+            let _ = self
+                .store
+                .devices_upsert(&SyncDeviceRecord {
+                    device_id: self.handle.device_id().to_string(),
+                    app_version: self.app_version.clone(),
+                    device_name: self.device_name.clone(),
+                    role: collector_role,
+                    priority: self.collector_priority(),
+                    ..SyncDeviceRecord::default()
+                })
+                .await;
+        }
 
         let bootstrap_pending = sync_meta_get(&self.db, META_BOOTSTRAP_PENDING)?
             .map(|value| value == "1")

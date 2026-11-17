@@ -27,6 +27,7 @@ pub async fn sync__configure(
     enabled: Option<bool>,
     connection: Option<vrcx_0_contracts::SyncConnectionInput>,
     intervalSec: Option<i64>,
+    collectorPriority: Option<i64>,
 ) -> Result<SyncStatusSnapshot, AppError> {
     let mut entries = Vec::new();
     if let Some(enabled) = enabled {
@@ -52,6 +53,12 @@ pub async fn sync__configure(
     }
     if let Some(interval) = intervalSec {
         entries.push(config_entry("remoteSync.intervalSec", interval.max(5)));
+    }
+    if let Some(priority) = collectorPriority {
+        entries.push(config_entry(
+            "remoteSync.collectorPriority",
+            priority.clamp(0, 100),
+        ));
     }
     if !entries.is_empty() {
         state

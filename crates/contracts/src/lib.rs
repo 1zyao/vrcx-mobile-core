@@ -1,3 +1,4 @@
+pub mod collector_gate;
 pub mod activity;
 pub mod activity_page;
 pub mod activity_view;
@@ -79,8 +80,9 @@ pub use profile_backup::{
     ProfileRestoreValidationOutcome,
 };
 pub use profile_config::{resolve_config_key, ConfigMutation, ConfigReadEntry, ConfigWriteEntry};
+pub use collector_gate::{is_live_feed_collector, set_live_feed_collector};
 pub use sync::{
-    is_config_key_syncable, looks_like_user_prefix, register_sync_table, register_sync_table_owned,
+    is_config_key_syncable, DEVICE_ROLE_AUTO, DEVICE_ROLE_FORCED, looks_like_user_prefix, register_sync_table, register_sync_table_owned,
     resolve_sync_table, sync_table_descriptor, SyncBootstrapProgress, SyncConnectionFields,
     SyncConnectionInput, SyncConnectionTestResult, SyncCycleRecord, SyncDeviceRecord,
     SyncFieldSemantic, SyncHlc, SyncOpKind, SyncOpRecord, SyncRowSemantic, SyncStatusSnapshot,

@@ -701,12 +701,14 @@ export const commands = {
     syncConfigure: (
         enabled: boolean | null,
         connection: SyncConnectionInput | null,
-        intervalSec: number | null
+        intervalSec: number | null,
+        collectorPriority: number | null
     ) =>
         __TAURI_INVOKE<SyncStatusSnapshot>('sync__configure', {
             enabled,
             connection,
-            intervalSec
+            intervalSec,
+            collectorPriority
         }),
     /**  Stored connection fields without the password value. */
     syncGetConnection: () =>
@@ -7707,6 +7709,8 @@ export type SyncConnectionFields = {
     hasPassword: boolean;
     /**  Sync cadence in seconds (0 = default 60). */
     intervalSeconds?: number;
+    /**  Collector election priority (higher records live feed first, 0-100). */
+    collectorPriority?: number;
 };
 
 /**
@@ -7744,6 +7748,26 @@ export type SyncDeviceRecord = {
     appVersion: string;
     /**  Human-readable machine name (hostname) reported by the device. */
     deviceName?: string;
+    /**
+     *  Collector role this device advertises in `_sync_devices.role`.
+     *
+     *  `auto` (default) yields to any fresh `forced` peer and to any
+     *  `auto` peer with a smaller device id; `forced` never yields (two
+     *  forced devices both collect — manual double-write, as documented).
+     *  This mirrors the `VRCX_FeedCollector` tri-state that shipped in
+     *  VRCX-K: a 24/7 server sets `forced`, desktops stay `auto` and let
+     *  it collect, so no two nodes ever record the same friend event.
+     */
+    role?: string;
+    /**
+     *  Collector priority advertised in `_sync_devices.priority`.
+     *
+     *  Higher wins: the fresh device with the highest priority collects, and
+     *  equal priorities fall back to the smallest device id. The 24/7 server
+     *  sits at 0 so any active desktop (10, 20, ...) takes over instantly, and
+     *  the server only collects while every desktop is off.
+     */
+    priority?: number;
     /**  Server-captured client address (PostgreSQL inet_client_addr). */
     ipAddr?: string;
     /**  Server-clock timestamp of the device's last heartbeat (per cycle). */

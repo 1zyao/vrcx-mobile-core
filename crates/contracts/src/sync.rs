@@ -219,6 +219,13 @@ pub const SYNC_EXCLUDED_CONFIG_KEYS: &[&str] = &[
     "config:vrcx_youtubeapikey",
     // This feature's own database password.
     "config:remotesync.password",
+    // Collector role is per-device: a 24/7 server sets `forced`, desktops keep
+    // `auto`. It must never travel — syncing it would make every desktop think
+    // it is the forced collector and duplicate the server's feed rows.
+    // (Stored keys carry the `vrcx_` infix, so list both spellings.)
+    "config:vrcx_remotesync.password",
+    "config:vrcx_remotesync.collector",
+    "config:remotesync.collector",
     // Schema/machine-local bookkeeping.
     "config:vrcx_0_databaseversion",
     "config:databaseversion",
@@ -237,6 +244,14 @@ pub fn is_config_key_syncable(normalized_key: &str) -> bool {
 
 /// Remote schema generation for the sync protocol itself.
 pub const SYNC_PROTOCOL_SCHEMA_VERSION: i64 = 1;
+
+/// Collector roles advertised in `_sync_devices.role`.
+///
+/// `auto` participates in the election (yields to a fresh `forced` peer
+/// and to any fresh `auto` peer with a smaller device id); `forced`
+/// always collects.
+pub const DEVICE_ROLE_AUTO: &str = "auto";
+pub const DEVICE_ROLE_FORCED: &str = "forced";
 
 /// The synced-table catalog. Credentials, entity caches, screenshot index and
 /// derived activity read-models are deliberately absent: caches are
@@ -642,6 +657,9 @@ pub struct SyncConnectionFields {
     /// Sync cadence in seconds (0 = default 60).
     #[serde(default)]
     pub interval_seconds: i64,
+    /// Collector election priority (higher records live feed first, 0-100).
+    #[serde(default)]
+    pub collector_priority: i64,
 }
 
 /// Per-table ops moved by the most recent completed cycle, so the status
@@ -710,6 +728,24 @@ pub struct SyncDeviceRecord {
     /// Human-readable machine name (hostname) reported by the device.
     #[serde(default)]
     pub device_name: String,
+    /// Collector role this device advertises in `_sync_devices.role`.
+    ///
+    /// `auto` (default) yields to any fresh `forced` peer and to any
+    /// `auto` peer with a smaller device id; `forced` never yields (two
+    /// forced devices both collect — manual double-write, as documented).
+    /// This mirrors the `VRCX_FeedCollector` tri-state that shipped in
+    /// VRCX-K: a 24/7 server sets `forced`, desktops stay `auto` and let
+    /// it collect, so no two nodes ever record the same friend event.
+    #[serde(default)]
+    pub role: String,
+    /// Collector priority advertised in `_sync_devices.priority`.
+    ///
+    /// Higher wins: the fresh device with the highest priority collects, and
+    /// equal priorities fall back to the smallest device id. The 24/7 server
+    /// sits at 0 so any active desktop (10, 20, ...) takes over instantly, and
+    /// the server only collects while every desktop is off.
+    #[serde(default)]
+    pub priority: i32,
     /// Server-captured client address (PostgreSQL inet_client_addr).
     #[serde(default)]
     pub ip_addr: String,

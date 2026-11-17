@@ -16,6 +16,8 @@ use vrcx_0_outbound_adapters::{PostgresSyncStore, PostgresSyncStoreConfig};
 use vrcx_0_persistence::config::{get_bool, get_string};
 use vrcx_0_persistence::DatabaseService;
 
+pub(crate) mod collector_election;
+
 /// Owns the sync engine; cheap to share into tasks and Tauri commands.
 pub struct RemoteSyncHost {
     db: Arc<DatabaseService>,
@@ -45,6 +47,11 @@ impl RemoteSyncHost {
             device_name,
             engine: RwLock::new(None),
         }
+    }
+
+    /// Local database handle (config store + per-device sync state).
+    pub fn db(&self) -> &Arc<DatabaseService> {
+        &self.db
     }
 
     pub fn current(&self) -> Option<Arc<RemoteSyncEngine>> {
@@ -87,6 +94,10 @@ impl RemoteSyncHost {
             tls_verify: settings.tls_verify,
             allow_plaintext: settings.allow_plaintext,
             has_password: !settings.password.is_empty(),
+            collector_priority: read_i64(
+                crate::state::remote_sync::collector_election::CONFIG_COLLECTOR_PRIORITY,
+                0,
+            ),
             interval_seconds: read_i64(
                 vrcx_0_application_sync::CONFIG_INTERVAL_SEC,
                 vrcx_0_application_sync::DEFAULT_INTERVAL_SEC as i64,
@@ -178,6 +189,11 @@ impl RemoteSyncHost {
     /// Called once after data services start; a no-op unless the user has
     /// sync enabled.
     pub fn start_auto(self: &Arc<Self>) {
+        // Starts regardless of whether sync is configured yet: the election is a
+        // no-op (fail-open, collect) until peers appear, and it must keep running
+        // when the user enables sync later from the settings tab.
+        collector_election::spawn(Arc::clone(self), &self.tasks);
+
         let settings = self.settings();
         if !settings.enabled || !settings.is_configured() {
             return;

@@ -3281,6 +3281,8 @@
                     "testing": "測試中…",
                     "privacy_note": "同步只在你自己的資料庫和裝置之間共享資料；密碼與登入憑證永遠不會離開本機。",
                     "interval_unit": "秒",
+                    "priority_label": "採集優先級",
+                    "priority_hint": "數字越大越優先採集即時動態（0-100）。",
                     "test_failed_short": "連線失敗 — 懸停查看詳情"
                 },
                 "enable_toast": "遠端同步已啟用",
@@ -3317,7 +3319,8 @@
                     "last_pushed": "上次上傳",
                     "last_pulled": "上次下載",
                     "ops_count": "{count} 條",
-                    "this_device_tag": "本機"
+                    "this_device_tag": "本機",
+                    "writing_tag": "正在寫入"
                 },
                 "phase": {
                     "idle": "閒置",
@@ -3341,10 +3344,6 @@
                 "options": {
                     "title": "同步頻率",
                     "description": "自動交換變更的頻率。"
-                },
-                "cloud": {
-                    "title": "VRCX-Cloud 與資料同步",
-                    "body": "VRCX-Cloud 是本資料同步功能的官方自架伺服器實作：一個 Rust (axum) 伺服器，作為同步網格中的對等節點，與桌面端共用同一套基於操作日誌的 PostgreSQL 同步協定（HLC 衝突仲裁、冪等推送與斷點續傳）。在 Settings → Data Sync 填入 VRCX-Cloud 使用的 PostgreSQL 連線資訊即可加入同一網格；部署後可透過手機或區域網路瀏覽器使用完整 VRCX 體驗，並在桌面端靜默時自動接管即時會話。"
                 }
             },
             "advanced_groups": {

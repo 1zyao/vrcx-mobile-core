@@ -88,6 +88,7 @@ export function SettingsSyncTab() {
     const [tlsVerify, setTlsVerify] = useState(false);
     const [allowPlaintext, setAllowPlaintext] = useState(true);
     const [intervalSec, setIntervalSec] = useState('60');
+    const [collectorPriority, setCollectorPriority] = useState('0');
     const [enabled, setEnabled] = useState(false);
     const [testing, setTesting] = useState(false);
     const [testResult, setTestResult] =
@@ -161,6 +162,7 @@ export function SettingsSyncTab() {
                 setTlsVerify(fields.tlsVerify);
                 setAllowPlaintext(fields.allowPlaintext);
                 setHasPassword(fields.hasPassword);
+                setCollectorPriority((fields.collectorPriority ?? 0).toString());
                 if ((fields.intervalSeconds ?? 0) > 0) {
                     setIntervalSec(String(fields.intervalSeconds));
                 }
@@ -249,7 +251,9 @@ export function SettingsSyncTab() {
                     tlsVerify,
                     allowPlaintext
                 },
-                intervalSec: Number.parseInt(intervalSec, 10) || undefined
+                intervalSec: Number.parseInt(intervalSec, 10) || undefined,
+                collectorPriority:
+                    Number.parseInt(collectorPriority, 10) || 0
             });
             setStatus(snapshot);
             setEnabled(snapshot.enabled);
@@ -295,12 +299,36 @@ export function SettingsSyncTab() {
         }
     };
 
+    // Election rank advertised by each device; mirrors
+    // `collector_election::effective_priority` (legacy `forced` == 1000).
+    const collectorRank = (device: { role?: string; priority?: number }) =>
+        device.role === 'forced' && !device.priority
+            ? 1000
+            : (device.priority ?? 0);
+
     const canTest = host.trim().length > 0 && database.trim().length > 0;
     // Offline devices linger in the presence table until they age out of the
     // database; hiding them keeps the list to peers that can actually sync.
     const onlineDevices = status
         ? status.remoteDevices.filter((device) => device.online)
         : [];
+
+    // Who records live feed right now: the online device with the highest
+    // collector priority, ties broken by the smallest device id. Mirrors
+    // `collector_election::blockers` on the Rust side, so the badge matches what
+    // the engine actually decided. A legacy `forced` row without a number ranks
+    // as priority 1000 there, so it does here too.
+    const writerDeviceIds = new Set<string>(
+        (() => {
+            if (onlineDevices.length === 0) return [];
+            const ranked = [...onlineDevices].sort(
+                (a, b) =>
+                    collectorRank(b) - collectorRank(a) ||
+                    a.deviceId.localeCompare(b.deviceId)
+            );
+            return ranked[0] ? [ranked[0].deviceId] : [];
+        })()
+    );
 
     return (
         <SettingsTabContent value="sync">
@@ -437,6 +465,43 @@ export function SettingsSyncTab() {
                                     'view.settings.sync.connection.interval_unit'
                                 )}
                             </span>
+                        </div>
+                    </Field>
+                    <Field
+                        label={t(
+                            'view.settings.sync.connection.priority_label'
+                        )}
+                        description={t(
+                            'view.settings.sync.connection.priority_hint'
+                        )}
+                    >
+                        <div className="flex items-center justify-end gap-2">
+                            <Input
+                                value={collectorPriority}
+                                onChange={(event) =>
+                                    // digits only, at most 3 chars
+                                    setCollectorPriority(
+                                        event.target.value
+                                            .replace(/[^0-9]/g, '')
+                                            .slice(0, 3)
+                                    )
+                                }
+                                onBlur={() =>
+                                    setCollectorPriority((current) => {
+                                        const parsed =
+                                            Number.parseInt(current, 10);
+                                        if (!Number.isFinite(parsed)) {
+                                            return '0';
+                                        }
+                                        return Math.min(
+                                            100,
+                                            Math.max(0, parsed)
+                                        ).toString();
+                                    })
+                                }
+                                inputMode="numeric"
+                                className="w-20"
+                            />
                         </div>
                     </Field>
                 </div>
@@ -751,10 +816,25 @@ export function SettingsSyncTab() {
                                                             )}
                                                         </Badge>
                                                     ) : null}
+                                                    {writerDeviceIds.has(
+                                                        device.deviceId
+                                                    ) ? (
+                                                        <Badge className="h-4 px-1.5 text-[10px]">
+                                                            {t(
+                                                                'view.settings.sync.status.writing_tag'
+                                                            )}
+                                                        </Badge>
+                                                    ) : null}
                                                 </span>
                                                 <span className="text-muted-foreground shrink-0 font-mono">
                                                     {device.ipAddr || '—'}
                                                 </span>
+                                                {device.role ? (
+                                                    <span className="text-muted-foreground shrink-0 font-mono text-[10px] uppercase">
+                                                        {device.role} ·P
+                                                        {collectorRank(device)}
+                                                    </span>
+                                                ) : null}
                                                 <span className="ml-auto flex shrink-0 items-center gap-3">
                                                     <span className="text-muted-foreground">
                                                         {device.appVersion ||
@@ -786,27 +866,7 @@ export function SettingsSyncTab() {
                 )}
             </SettingsCard>
 
-            <details className="group border-stroke-subtle text-sm">
-                <summary className="text-muted-foreground hover:text-foreground flex cursor-pointer list-none items-center gap-2 py-2 text-xs select-none">
-                    <CloudCogIcon className="size-3.5" />
-                    {t('view.settings.sync.cloud.title')}
-                    <ChevronDownIcon className="size-3 transition-transform group-open:rotate-180" />
-                </summary>
-                <p className="text-muted-foreground pb-2 text-xs leading-relaxed">
-                    {t('view.settings.sync.cloud.body')}
-                </p>
-                <p className="pb-1 text-xs">
-                    <a
-                        href="https://github.com/Ero-Cat/VRCX-Cloud"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-primary inline-flex items-center gap-1 hover:underline"
-                    >
-                        <ExternalLinkIcon className="size-3" />
-                        github.com/Ero-Cat/VRCX-Cloud
-                    </a>
-                </p>
-            </details>
+
         </SettingsTabContent>
     );
 }
