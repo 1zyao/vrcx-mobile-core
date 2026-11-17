@@ -281,3 +281,34 @@ fn search_rows_matches_all_searchable_event_families() -> Result<(), crate::Erro
     assert_eq!(result[3]["videoName"], "Needle Video");
     Ok(())
 }
+
+/// The session view depends on the world name surviving the read.
+///
+/// The phone showed empty world names for every session while the same database held names in 9870
+/// of 9872 `gamelog_location` rows, so this asserts the round trip directly: seed a location with a
+/// name, read it back through the exact function the session view uses.
+#[test]
+fn session_location_segments_keep_the_world_name() -> Result<(), crate::Error> {
+    let test_db = test_db("session-segments-world-name")?;
+    seed_fixture(&test_db.db)?;
+
+    let segments =
+        crate::game_log::query::get_session_location_segments(
+            &test_db.db,
+            &OwnerId::new("usr_test"),
+            None,
+            10,
+        )?;
+
+    assert!(!segments.is_empty(), "fixture seeds three location rows");
+    for segment in &segments {
+        assert!(
+            !segment.world_name.is_empty(),
+            "location {} lost its world name (got {:?})",
+            segment.location,
+            segment.world_name
+        );
+    }
+    Ok(())
+}
+
