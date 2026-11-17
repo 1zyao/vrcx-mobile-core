@@ -112,7 +112,7 @@ impl RemoteSyncHost {
                 tls_verify: settings.tls_verify,
                 allow_plaintext: settings.allow_plaintext,
             })
-            .map_err(|error| Error::Custom(error.to_string()))?,
+            .map_err(|error| Error::custom(error.to_string()))?,
         );
         let engine = RemoteSyncEngine::new(
             Arc::clone(&self.db),
@@ -122,10 +122,10 @@ impl RemoteSyncHost {
             self.app_version.clone(),
             self.device_name.clone(),
         )
-        .map_err(|error| Error::Custom(error.to_string()))?;
+        .map_err(|error| Error::custom(error.to_string()))?;
         engine
             .mark_bootstrap_pending()
-            .map_err(|error| Error::Custom(format!("Failed to arm sync bootstrap: {error}")))?;
+            .map_err(|error| Error::custom(format!("Failed to arm sync bootstrap: {error}")))?;
         engine.start_loop(self.tasks.clone());
         if let Ok(mut guard) = self.engine.write() {
             *guard = Some(Arc::clone(&engine));
@@ -145,12 +145,12 @@ impl RemoteSyncHost {
                 tracing::info!("sync engine missing; rebuilding from stored settings");
                 self.restart_from_config()
                     .await?
-                    .ok_or_else(|| Error::Custom(
+                    .ok_or_else(|| Error::custom(
                         "Remote sync engine could not be started from the saved settings; re-open the Data Sync settings and enable it again."
                             .to_string(),
                     ))?;
             } else {
-                return Err(Error::Custom(
+                return Err(Error::custom(
                     "Remote sync is not running: fill in the connection fields and turn on the enable switch in Settings → Data Sync first."
                         .to_string(),
                 ));
@@ -160,7 +160,7 @@ impl RemoteSyncHost {
         engine
             .run_cycle_and_status()
             .await
-            .map_err(|error| Error::Custom(error.to_string()))
+            .map_err(|error| Error::custom(error.to_string()))
     }
 
     /// Stop the engine and uninstall local capture.
@@ -168,7 +168,7 @@ impl RemoteSyncHost {
         if let Ok(mut guard) = self.engine.write() {
             if let Some(existing) = guard.take() {
                 existing.shutdown().map_err(|error| {
-                    Error::Custom(format!("Failed to stop remote sync: {error}"))
+                    Error::custom(format!("Failed to stop remote sync: {error}"))
                 })?;
             }
         }

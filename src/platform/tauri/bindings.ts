@@ -693,6 +693,34 @@ export const commands = {
         ),
     appConfigSetValues: (entries: ConfigWriteEntry[]) =>
         __TAURI_INVOKE<null>('app__config_set_values', { entries }),
+    /**
+     *  Persist sync settings and (re)start the engine accordingly. Passing
+     *  `None` keeps a setting group unchanged; an empty password keeps the
+     *  stored one.
+     */
+    syncConfigure: (
+        enabled: boolean | null,
+        connection: SyncConnectionInput | null,
+        intervalSec: number | null
+    ) =>
+        __TAURI_INVOKE<SyncStatusSnapshot>('sync__configure', {
+            enabled,
+            connection,
+            intervalSec
+        }),
+    /**  Stored connection fields without the password value. */
+    syncGetConnection: () =>
+        __TAURI_INVOKE<SyncConnectionFields>('sync__get_connection'),
+    /**  Probe the given connection details without persisting them. */
+    syncTestConnection: (connection: SyncConnectionInput) =>
+        __TAURI_INVOKE<SyncConnectionTestResult>('sync__test_connection', {
+            connection
+        }),
+    syncStatus: () => __TAURI_INVOKE<SyncStatusSnapshot>('sync__status'),
+    syncTriggerNow: () =>
+        __TAURI_INVOKE<SyncStatusSnapshot>('sync__trigger_now'),
+    syncBootstrapProgress: () =>
+        __TAURI_INVOKE<SyncBootstrapProgress>('sync__bootstrap_progress'),
     appConfigListValues: () =>
         __TAURI_INVOKE<ConfigReadEntry[]>('app__config_list_values'),
     appConfigRemoveValue: (key: string) =>
@@ -3363,6 +3391,7 @@ export type BackendRuntimeEventPayloadMap = {
     runtimeGroupInstancesProjection: RuntimeGroupInstancesProjection;
     printsAutoCleanup: PrintAutoCleanupEvent;
     profileBackupStatus: ProfileBackupStatus;
+    syncStatusChanged: SyncStatusChangedEvent;
     profileRestoreProgress: ProfileRestoreProgress;
     dataDirMigration: DataDirMigrationStatus;
     favoritesChanged: FavoritesChangedPayload;
@@ -7643,6 +7672,150 @@ export type StartupBootstrapSnapshot = {
     configEntries: ConfigReadEntry[];
     systemLanguage: string;
     systemCulture: string;
+};
+
+export type SyncBootstrapProgress = {
+    running: boolean;
+    phase: string;
+    currentTable: string;
+    tablesDone: number;
+    tablesTotal: number;
+    rowsDone: number;
+    /**  Total rows at bootstrap start (0 until measured). */
+    rowsTotal?: number;
+    /**  Rows completed within the current table. */
+    currentTableRowsDone?: number;
+    /**  Total rows of the current table (0 until measured). */
+    currentTableRowsTotal?: number;
+    /**  Per-table snapshot: how far each table is. */
+    tables?: SyncTableProgress[];
+};
+
+/**
+ *  Structured database connection fields for the settings UI. The backend
+ *  composes the connection string from these; the password never travels
+ *  back to the frontend (only whether one is stored).
+ */
+export type SyncConnectionFields = {
+    host: string;
+    port: number;
+    user: string;
+    database: string;
+    tlsVerify: boolean;
+    /**  Explicit opt-in for servers without TLS (trusted LAN only). */
+    allowPlaintext: boolean;
+    hasPassword: boolean;
+    /**  Sync cadence in seconds (0 = default 60). */
+    intervalSeconds?: number;
+};
+
+/**
+ *  Connection form submission for configure/test. The password is only
+ *  present when the user typed a new one.
+ */
+export type SyncConnectionInput = {
+    host: string;
+    port: number;
+    user: string;
+    password?: string | null;
+    database: string;
+    tlsVerify?: boolean;
+    allowPlaintext?: boolean;
+};
+
+export type SyncConnectionTestResult = {
+    ok: boolean;
+    serverVersion: string;
+    latencyMs: number;
+    error: string | null;
+};
+
+/**  One completed sync cycle in the persisted history ring. */
+export type SyncCycleRecord = {
+    at: string;
+    durationMs: number;
+    pushed: number;
+    pulled: number;
+    error?: string | null;
+};
+
+export type SyncDeviceRecord = {
+    deviceId: string;
+    appVersion: string;
+    /**  Human-readable machine name (hostname) reported by the device. */
+    deviceName?: string;
+    /**  Server-captured client address (PostgreSQL inet_client_addr). */
+    ipAddr?: string;
+    /**  Server-clock timestamp of the device's last heartbeat (per cycle). */
+    lastSeenAt?: string | null;
+    /**
+     *  Age of the last heartbeat in seconds, computed on the server so
+     *  skewed client clocks cannot fake presence.
+     */
+    seenSecondsAgo?: number;
+    /**
+     *  Derived by the engine: heartbeat is recent enough for the device to
+     *  be considered online.
+     */
+    online?: boolean;
+};
+
+/**
+ *  Pushed to the frontend after every completed cycle so the status card
+ *  reflects a finished sync immediately instead of on the next poll.
+ */
+export type SyncStatusChangedEvent = SyncStatusSnapshot;
+
+/**  Snapshot of sync health surfaced to the frontend. */
+export type SyncStatusSnapshot = {
+    enabled: boolean;
+    configured: boolean;
+    phase: string;
+    deviceId: string;
+    lastPushAt: string | null;
+    lastPullAt: string | null;
+    pendingOutbox: number;
+    pullCursor: number;
+    lastError: string | null;
+    remoteSchemaVersion: number;
+    remoteDevices: SyncDeviceRecord[];
+    /**  Ops moved by the most recent completed cycle. */
+    lastPushedOps?: number;
+    lastPulledOps?: number;
+    lastCycleAt?: string | null;
+    /**
+     *  Tables touched by the most recent completed cycle (sorted by name),
+     *  empty when the cycle moved nothing.
+     */
+    lastCycleTables?: SyncTableOpCount[];
+    /**
+     *  Seconds until the interval loop fires the next cycle; null while
+     *  disabled, bootstrapping, or before the first cycle completes.
+     */
+    nextCycleInSecs?: number | null;
+    /**
+     *  Most recent cycles, newest first (bounded ring, persisted across
+     *  restarts).
+     */
+    cycleHistory?: SyncCycleRecord[];
+};
+
+/**
+ *  Per-table ops moved by the most recent completed cycle, so the status
+ *  card can show what a sync actually touched.
+ */
+export type SyncTableOpCount = {
+    table: string;
+    pushed: number;
+    pulled: number;
+};
+
+/**  One table's upload progress inside a bootstrap. */
+export type SyncTableProgress = {
+    name: string;
+    rowsDone: number;
+    rowsTotal: number;
+    done: boolean;
 };
 
 export type TelemetryClientEvent =
