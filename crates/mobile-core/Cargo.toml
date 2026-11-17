@@ -5,6 +5,10 @@ edition = "2021"
 license.workspace = true
 description = "In-process core for the phone app: host state plus the loopback command bus"
 
+[[bin]]
+name = "vrcx-0-mobile-probe"
+path = "src/bin/probe.rs"
+
 [lib]
 name = "vrcx_0_mobile"
 crate-type = ["cdylib", "rlib"]
@@ -12,7 +16,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "signal"] }
 tracing = { workspace = true }
 vrcx-0-application-core = { path = "../application-core" }
 vrcx-0-command-server = { path = "../command-server" }

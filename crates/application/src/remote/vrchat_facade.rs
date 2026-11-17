@@ -162,109 +162,6 @@ impl VrchatRemoteFacade {
         Ok(response)
     }
 
-    /// A single user by id (`GET users/{id}`), the raw read behind `app__vrchat_user_get`.
-    pub async fn user_get(&self, user_id: String) -> Result<VrchatResponse> {
-        let (user_id, request) = vrcx_0_vrchat_protocol::users::user_get_input(
-            VRCHAT_API_DEFAULT_ENDPOINT.into(),
-            user_id,
-        )?;
-        self.execute(
-            "app__vrchat_user_get",
-            format!("Getting user {user_id}."),
-            request,
-            VrchatScope::Vrchat,
-        )
-        .await
-    }
-
-    /// A group by id (`GET groups/{id}`), the raw read behind `app__vrchat_group_get`.
-    pub async fn group_get(&self, group_id: String, include_roles: bool) -> Result<VrchatResponse> {
-        let (group_id, request) = vrcx_0_vrchat_protocol::groups::profile_get_input(
-            VRCHAT_API_DEFAULT_ENDPOINT.into(),
-            group_id,
-            include_roles,
-        )?;
-        self.execute(
-            "app__vrchat_group_get",
-            format!("Getting group {group_id}."),
-            request,
-            VrchatScope::Vrchat,
-        )
-        .await
-    }
-
-    /// A page of group members (`GET groups/{id}/members`).
-    pub async fn group_members(
-        &self,
-        group_id: String,
-        n: i32,
-        offset: i32,
-        sort: crate::social::GroupMemberSort,
-        role_id: String,
-    ) -> Result<VrchatResponse> {
-        let (group_id, request) = vrcx_0_vrchat_protocol::groups::members_get_input(
-            group_id,
-            n,
-            offset,
-            sort,
-            role_id,
-        )?;
-        self.execute(
-            "app__vrchat_group_members_get",
-            format!("Getting members of group {group_id}."),
-            request,
-            VrchatScope::Vrchat,
-        )
-        .await
-    }
-
-    /// Joins a group (`POST groups/{id}/join`).
-    ///
-    /// Cloud serves this through its groups service; the service is not on this host, so the raw
-    /// request is wrapped here - the same call, without the service's caching.
-    pub async fn group_join(&self, group_id: String) -> Result<VrchatResponse> {
-        let (group_id, request) =
-            vrcx_0_vrchat_protocol::groups::join_input(group_id)?;
-        self.execute(
-            "app__vrchat_group_join",
-            format!("Joining group {group_id}."),
-            request,
-            VrchatScope::Vrchat,
-        )
-        .await
-    }
-
-    /// Leaves a group (`POST groups/{id}/leave`).
-    pub async fn group_leave(&self, group_id: String) -> Result<VrchatResponse> {
-        let (group_id, request) = vrcx_0_vrchat_protocol::groups::leave_input(
-            VRCHAT_API_DEFAULT_ENDPOINT.into(),
-            group_id,
-        )?;
-        self.execute(
-            "app__vrchat_group_leave",
-            format!("Leaving group {group_id}."),
-            request,
-            VrchatScope::Vrchat,
-        )
-        .await
-    }
-
-    /// The groups a user belongs to (`GET users/{id}/groups`).
-    pub async fn user_groups(&self, user_id: String) -> Result<VrchatResponse> {
-        let (user_id, request) =
-            vrcx_0_vrchat_protocol::groups::user_groups_get_input(
-                VRCHAT_API_DEFAULT_ENDPOINT.into(),
-                user_id,
-            )?;
-        self.execute(
-            "app__vrchat_group_user_groups_get",
-            format!("Getting groups for user {user_id}."),
-            request,
-            VrchatScope::Vrchat,
-        )
-        .await
-    }
-
     pub async fn licensed_avatars(&self, n: i32, offset: i32) -> Result<VrchatResponse> {
         self.execute(
             "app__vrchat_economy_licensed_avatars_get",
@@ -447,62 +344,6 @@ impl VrchatRemoteFacade {
     }
 
 
-
-    /// Wears an avatar (`PUT avatars/{id}/select`).
-    ///
-    /// Cloud reaches this through its avatars service; that service is not on this host, so the
-    /// protocol builder is wrapped here. Reversible by selecting another avatar, and it changes
-    /// nothing but the signed-in account's own current avatar.
-    pub async fn avatar_select(&self, avatar_id: String) -> Result<VrchatResponse> {
-        let (avatar_id, request) = vrcx_0_vrchat_protocol::avatars::avatar_select_input(
-            VRCHAT_API_DEFAULT_ENDPOINT.into(),
-            avatar_id,
-        )?;
-        self.execute(
-            "app__vrchat_avatar_select",
-            format!("Selecting avatar {avatar_id}."),
-            request,
-            VrchatScope::Vrchat,
-        )
-        .await
-    }
-
-    /// Sets the fallback avatar (`PUT avatars/{id}/selectFallback`).
-    pub async fn avatar_select_fallback(&self, avatar_id: String) -> Result<VrchatResponse> {
-        let (avatar_id, request) =
-            vrcx_0_vrchat_protocol::avatars::avatar_select_fallback_input(
-                VRCHAT_API_DEFAULT_ENDPOINT.into(),
-                avatar_id,
-            )?;
-        self.execute(
-            "app__vrchat_avatar_select_fallback",
-            format!("Selecting fallback avatar {avatar_id}."),
-            request,
-            VrchatScope::Vrchat,
-        )
-        .await
-    }
-
-    /// One avatar by id (`GET avatars/{id}`).
-    ///
-    /// Cloud has no command for this exact read: its `app__avatar_get` is a *local* cache read,
-    /// and its per-avatar paths go through the list command or the avatar gallery. This wraps the
-    /// protocol builder so the phone has one round trip for a single avatar instead of fetching a
-    /// list to find it.
-    pub async fn avatar_get(&self, avatar_id: String) -> Result<VrchatResponse> {
-        let (avatar_id, request) =
-            vrcx_0_vrchat_protocol::avatars::avatar_get_input(
-                VRCHAT_API_DEFAULT_ENDPOINT.into(),
-                avatar_id,
-            )?;
-        self.execute(
-            "app__vrchat_avatar_get",
-            format!("Getting avatar {avatar_id}."),
-            request,
-            VrchatScope::Vrchat,
-        )
-        .await
-    }
 
     pub async fn instance_get(
         &self,
@@ -1410,7 +1251,7 @@ impl VrchatRemoteFacade {
             .await
     }
 
-    async fn execute(
+    pub async fn execute(
         &self,
         command: &str,
         detail: impl Into<String>,

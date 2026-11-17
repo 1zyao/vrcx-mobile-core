@@ -20,6 +20,7 @@ vrcx-0-application-game = { path = "../application-game" }
 vrcx-0-core = { path = "../core" }
 vrcx-0-outbound-adapters = { path = "../outbound-adapters" }
 vrcx-0-persistence = { path = "../persistence" }
+vrcx-0-vrchat-protocol = { path = "../vrchat-protocol" }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["net", "io-util", "rt", "macros", "sync"] }

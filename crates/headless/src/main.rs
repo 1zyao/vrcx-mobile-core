@@ -67,7 +67,7 @@ async fn async_main() -> ExitCode {
         }
     };
 
-    let state = std::sync::Arc::new(match RuntimeHostState::new(RuntimeHostOptions {
+    let state = match RuntimeHostState::new(RuntimeHostOptions {
         realtime_origin: "http://localhost:9000".into(),
         launched_from_autostart: false,
         app_data_dir: app_data_dir.clone(),
@@ -88,67 +88,11 @@ async fn async_main() -> ExitCode {
             );
             return ExitCode::from(1);
         }
-    });
+    };
 
     let (fatal_tx, mut fatal_rx) = mpsc::unbounded_channel();
     let console_sink = ConsoleRuntimeEventSink::new(fatal_tx, app_data_dir.current_dir.clone());
-
-    // Optional command bus: the same registry the phone uses, so a remote client can
-    // drive this node over POST /api/invoke. Off unless a port is given, because it
-    // exposes the node to anything that can reach loopback.
-    let bus_only = args.iter().any(|arg| arg == "--command-bus-only");
-
-    let command_bus_port = args
-        .iter()
-        .position(|arg| arg == "--command-bus-port")
-        .and_then(|index| args.get(index + 1))
-        .and_then(|value| value.parse::<u16>().ok());
-
-    match command_bus_port {
-        Some(port) => {
-            let events = vrcx_0_command_server::EventBus::new(256);
-            // Both sinks stay alive: console logging keeps working while the bus
-            // forwards the same events to connected clients.
-            state.set_event_sink(vrcx_0_mobile_host::TeeSink {
-                first: std::sync::Arc::new(console_sink.clone()),
-                second: std::sync::Arc::new(vrcx_0_mobile_host::BridgeSink::new(events)),
-            });
-            let bus = vrcx_0_mobile_host::build_bus(std::sync::Arc::clone(&state));
-            match vrcx_0_command_server::serve_on(bus, port).await {
-                Ok((address, handle)) => {
-                    std::mem::forget(handle);
-                    println!("command bus listening on http://{address}/api/invoke");
-                }
-                Err(error) => {
-                    report_headless_error(
-                        Some(&app_data_dir.current_dir),
-                        "headless:command-bus",
-                        format!("command bus bind failed on port {port}: {error}"),
-                    );
-                    return ExitCode::from(1);
-                }
-            }
-        }
-        None => state.set_event_sink(console_sink.clone()),
-    }
-
-    // Serve the bus without a backend runtime. A read-only query node does not need
-    // a live VRChat session, and this also makes the bus testable without credentials
-    // (the backend runtime aborts the process when no account is saved).
-    if bus_only {
-        if command_bus_port.is_none() {
-            report_headless_error(
-                Some(&app_data_dir.current_dir),
-                "headless:command-bus-only",
-                "--command-bus-only requires --command-bus-port <port>".to_string(),
-            );
-            return ExitCode::from(1);
-        }
-        println!("command bus only: backend runtime not started");
-        let _ = tokio::signal::ctrl_c().await;
-        shutdown_runtime(&state, "ctrl-c");
-        return ExitCode::SUCCESS;
-    }
+    state.set_event_sink(console_sink.clone());
 
     match state.start_headless_backend_runtime(cli_login_prompt).await {
         Ok(_) => {}
@@ -433,7 +377,3 @@ fn is_runtime_stopped_event(event: &str, payload: &Value) -> bool {
         .ok()
         .is_some_and(|telemetry| telemetry.kind == BackendRuntimeTelemetryKind::RuntimeStopped)
 }
-
-
-
-

@@ -12,6 +12,7 @@ use std::sync::Arc;
 
 mod dialog;
 mod state_ext;
+mod vrchat_calls;
 mod instance_history;
 
 use std::collections::HashMap;
@@ -101,9 +102,7 @@ async fn app__vrchat_group_members_get(
     args: InputArgs<vrcx_0_application::social::VrchatGroupMembersInput>,
 ) -> Result<serde_json::Value, CommandError> {
     let input = args.input;
-    let response = state
-        .vrchat_remote()
-        .group_members(input.group_id, input.n, input.offset, input.sort, input.role_id)
+    let response = vrchat_calls::group_members(&state, input.group_id, input.n, input.offset, input.sort, input.role_id)
         .await
         .map_err(|error| CommandError::failed(error.to_string()))?;
     serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
@@ -113,9 +112,7 @@ async fn app__vrchat_group_join(
     state: Arc<RuntimeHostState>,
     args: InputArgs<vrcx_0_application::social::VrchatGroupIdInput>,
 ) -> Result<serde_json::Value, CommandError> {
-    let response = state
-        .vrchat_remote()
-        .group_join(args.input.group_id)
+    let response = vrchat_calls::group_join(&state, args.input.group_id)
         .await
         .map_err(|error| CommandError::failed(error.to_string()))?;
     serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
@@ -125,9 +122,7 @@ async fn app__vrchat_group_leave(
     state: Arc<RuntimeHostState>,
     args: InputArgs<vrcx_0_application::social::VrchatGroupIdInput>,
 ) -> Result<serde_json::Value, CommandError> {
-    let response = state
-        .vrchat_remote()
-        .group_leave(args.input.group_id)
+    let response = vrchat_calls::group_leave(&state, args.input.group_id)
         .await
         .map_err(|error| CommandError::failed(error.to_string()))?;
     serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
@@ -719,9 +714,7 @@ async fn app__vrchat_group_user_groups_get(
     state: Arc<RuntimeHostState>,
     args: InputArgs<GroupUserGroupsInput>,
 ) -> Result<serde_json::Value, CommandError> {
-    let response = state
-        .vrchat_remote()
-        .user_groups(args.input.user_id)
+    let response = vrchat_calls::user_groups(&state, args.input.user_id)
         .await
         .map_err(|error| CommandError::failed(error.to_string()))?;
     serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
@@ -909,9 +902,7 @@ async fn app__vrchat_avatar_select(
     state: Arc<RuntimeHostState>,
     args: InputArgs<AvatarGetArgs>,
 ) -> Result<serde_json::Value, CommandError> {
-    let response = state
-        .vrchat_remote()
-        .avatar_select(args.input.avatar_id)
+    let response = vrchat_calls::avatar_select(&state, args.input.avatar_id)
         .await
         .map_err(|error| CommandError::failed(error.to_string()))?;
     serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
@@ -921,9 +912,7 @@ async fn app__vrchat_avatar_select_fallback(
     state: Arc<RuntimeHostState>,
     args: InputArgs<AvatarGetArgs>,
 ) -> Result<serde_json::Value, CommandError> {
-    let response = state
-        .vrchat_remote()
-        .avatar_select_fallback(args.input.avatar_id)
+    let response = vrchat_calls::avatar_select_fallback(&state, args.input.avatar_id)
         .await
         .map_err(|error| CommandError::failed(error.to_string()))?;
     serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
@@ -933,9 +922,7 @@ async fn app__avatar_get(
     state: Arc<RuntimeHostState>,
     args: InputArgs<AvatarGetArgs>,
 ) -> Result<serde_json::Value, CommandError> {
-    let response = state
-        .vrchat_remote()
-        .avatar_get(args.input.avatar_id)
+    let response = vrchat_calls::avatar_get(&state, args.input.avatar_id)
         .await
         .map_err(|error| CommandError::failed(error.to_string()))?;
     serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
@@ -1139,9 +1126,7 @@ async fn app__vrchat_user_get(
     state: Arc<RuntimeHostState>,
     args: InputArgs<UserGetInput>,
 ) -> Result<serde_json::Value, CommandError> {
-    let response = state
-        .vrchat_remote()
-        .user_get(args.input.user_id)
+    let response = vrchat_calls::user_get(&state, args.input.user_id)
         .await
         .map_err(|error| CommandError::failed(error.to_string()))?;
     serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
@@ -1165,9 +1150,7 @@ async fn app__vrchat_group_get(
     args: InputArgs<GroupProfileInput>,
 ) -> Result<serde_json::Value, CommandError> {
     let input = args.input;
-    let response = state
-        .vrchat_remote()
-        .group_get(input.group_id, input.include_roles)
+    let response = vrchat_calls::group_get(&state, input.group_id, input.include_roles)
         .await
         .map_err(|error| CommandError::failed(error.to_string()))?;
     serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
