@@ -369,19 +369,19 @@ async fn app__config_list_values(
         .map_err(|error| CommandError::failed(error.to_string()))
 }
 
-#[derive(serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ConfigSetArgs {
-    #[serde(default)]
-    entries: Vec<vrcx_0_contracts::ConfigWriteEntry>,
-}
-
+/// `app__config_set_values` takes a flat `entries` array, exactly as the desktop reads it
+/// (`arg(&args, "entries")`). Wrapping it in `input` - which the first version did - makes every
+/// save fail deserialisation, and a caller that swallows the error sees nothing happen.
 async fn app__config_set_values(
     state: Arc<RuntimeHostState>,
-    args: InputArgs<ConfigSetArgs>,
+    args: serde_json::Value,
 ) -> Result<serde_json::Value, CommandError> {
+    let entries: Vec<vrcx_0_contracts::ConfigWriteEntry> = serde_json::from_value(
+        args.get("entries").cloned().unwrap_or(serde_json::Value::Null),
+    )
+    .map_err(|error| CommandError::bad_request(format!("invalid `entries`: {error}")))?;
     state
-        .config_set_values(args.input.entries)
+        .config_set_values(entries)
         .await
         .map_err(|error| CommandError::failed(error.to_string()))?;
     Ok(serde_json::Value::Null)
@@ -1057,7 +1057,7 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         "app__config_list_values",
         app__config_list_values,
     );
-    registry.register_typed::<InputArgs<ConfigSetArgs>, serde_json::Value, _, _>(
+    registry.register_typed::<serde_json::Value, serde_json::Value, _, _>(
         "app__config_set_values",
         app__config_set_values,
     );
@@ -1524,6 +1524,7 @@ async fn app__favorite_list(
     .map_err(|error| CommandError::failed(error.to_string()))?;
     Ok(rows)
 }
+
 
 
 
