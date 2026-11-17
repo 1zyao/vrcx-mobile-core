@@ -56,6 +56,30 @@ async fn app__vrchat_favorite_groups_get(
     serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
 }
 
+async fn app__vrchat_group_join(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<vrcx_0_application::social::VrchatGroupIdInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let response = state
+        .vrchat_remote()
+        .group_join(args.input.group_id)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+async fn app__vrchat_group_leave(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<vrcx_0_application::social::VrchatGroupIdInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let response = state
+        .vrchat_remote()
+        .group_leave(args.input.group_id)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
 /// Mirrors cloud's `VrchatFavoriteAddInput`; `favoriteId` is the ENTITY id
 /// (world/avatar/user), which is how VRCX addresses favourites.
 #[derive(serde::Deserialize)]
@@ -779,6 +803,7 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         "app__notification_list_query",
         app__notification_list_query,
     );
+
     registry.register_typed::<serde_json::Value, vrcx_0_contracts::SyncStatusSnapshot, _, _>(
         "sync__status",
         sync__status,
@@ -847,6 +872,18 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         "app__world_get",
         app__world_get,
     );
+    registry.register_typed::<
+        InputArgs<vrcx_0_application::social::VrchatGroupIdInput>,
+        serde_json::Value,
+        _,
+        _,
+    >("app__vrchat_group_join", app__vrchat_group_join);
+    registry.register_typed::<
+        InputArgs<vrcx_0_application::social::VrchatGroupIdInput>,
+        serde_json::Value,
+        _,
+        _,
+    >("app__vrchat_group_leave", app__vrchat_group_leave);
     registry.register_typed::<InputArgs<FavoriteAddInput>, serde_json::Value, _, _>(
         "app__vrchat_favorite_add",
         app__vrchat_favorite_add,
@@ -970,7 +1007,7 @@ mod tests {
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 42);
+        assert_eq!(registry.len(), 44);
     }
 }
 
@@ -1110,6 +1147,10 @@ async fn app__favorite_list(
     .map_err(|error| CommandError::failed(error.to_string()))?;
     Ok(rows)
 }
+
+
+
+
 
 
 

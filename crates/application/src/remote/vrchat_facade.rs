@@ -193,6 +193,37 @@ impl VrchatRemoteFacade {
         .await
     }
 
+    /// Joins a group (`POST groups/{id}/join`).
+    ///
+    /// Cloud serves this through its groups service; the service is not on this host, so the raw
+    /// request is wrapped here - the same call, without the service's caching.
+    pub async fn group_join(&self, group_id: String) -> Result<VrchatResponse> {
+        let (group_id, request) =
+            vrcx_0_vrchat_protocol::groups::join_input(group_id)?;
+        self.execute(
+            "app__vrchat_group_join",
+            format!("Joining group {group_id}."),
+            request,
+            VrchatScope::Vrchat,
+        )
+        .await
+    }
+
+    /// Leaves a group (`POST groups/{id}/leave`).
+    pub async fn group_leave(&self, group_id: String) -> Result<VrchatResponse> {
+        let (group_id, request) = vrcx_0_vrchat_protocol::groups::leave_input(
+            VRCHAT_API_DEFAULT_ENDPOINT.into(),
+            group_id,
+        )?;
+        self.execute(
+            "app__vrchat_group_leave",
+            format!("Leaving group {group_id}."),
+            request,
+            VrchatScope::Vrchat,
+        )
+        .await
+    }
+
     /// The groups a user belongs to (`GET users/{id}/groups`).
     pub async fn user_groups(&self, user_id: String) -> Result<VrchatResponse> {
         let (user_id, request) =
