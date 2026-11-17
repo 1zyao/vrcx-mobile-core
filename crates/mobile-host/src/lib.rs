@@ -1234,11 +1234,11 @@ async fn app__vrchat_search_groups_get(
     serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
 }
 
-/// Social favourites baseline, same name and `{"input": {…}}` envelope as cloud
-/// (`arg(&args, "input")` in cloud/crates/server/src/commands/application_social.rs:517).
+/// The user dialog's tab badges: 群组 / 创建的世界 / 原创模型 counts.
 ///
-/// The body is `state.social().favorites_baseline(input)`; the orchestration lives in
-/// `vrcx-0-social-runtime`, which is the same code path the desktop host uses.
+/// Same command and `{"input": {…}}` envelope as the desktop's user dialog. The desktop reaches it
+/// through a method on its own host state; here the pieces are assembled in `dialog.rs` from the
+/// public surface, so no accessor had to be added to `composition`.
 async fn app__user_dialog_tab_counts_get(
     state: Arc<RuntimeHostState>,
     args: InputArgs<vrcx_0_application::social::UserDialogTabCountsInput>,
@@ -1249,6 +1249,7 @@ async fn app__user_dialog_tab_counts_get(
     serde_json::to_value(output).map_err(|error| CommandError::failed(error.to_string()))
 }
 
+/// The 群组 tab of the user dialog, with the same shape as the desktop command.
 async fn app__user_groups_overview_get(
     state: Arc<RuntimeHostState>,
     args: InputArgs<vrcx_0_application::social::UserGroupsOverviewInput>,
@@ -1258,6 +1259,12 @@ async fn app__user_groups_overview_get(
         .map_err(|error| CommandError::failed(error.to_string()))?;
     serde_json::to_value(output).map_err(|error| CommandError::failed(error.to_string()))
 }
+
+/// Social favourites baseline, same name and `{"input": {…}}` envelope as cloud
+/// (`arg(&args, "input")` in cloud/crates/server/src/commands/application_social.rs:517).
+///
+/// The body is `state.social().favorites_baseline(input)`; the orchestration lives in
+/// `vrcx-0-social-runtime`, which is the same code path the desktop host uses.
 async fn app__social_favorites_baseline_get(
     state: Arc<RuntimeHostState>,
     args: InputArgs<vrcx_0_application_realtime::SocialFavoritesBaselineInput>,
