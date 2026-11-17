@@ -12,6 +12,8 @@ use std::sync::Arc;
 
 mod instance_history;
 
+use std::collections::HashMap;
+
 use vrcx_0_command_server::{CommandBus, CommandError, CommandRegistry, EventBus};
 use vrcx_0_composition::RuntimeHostState;
 use vrcx_0_application::auth::{
@@ -505,6 +507,32 @@ async fn sync__configure(
     }
     let status = state.remote_sync().status().await;
     serde_json::to_value(status).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+/// Bulk world summaries from the local cache (`app__world_summaries_get`).
+///
+/// Upstream has the same command for the desktop frontend, reading `local_data().world_summaries_get`.
+/// The phone has no `local_data`, but the rows live in the same `cache_world` table (it is one of the
+/// synced tables), so this is a direct read of that cache - no network, and a row that was never
+/// cached simply comes back absent instead of triggering a fetch.
+#[derive(serde::Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+struct WorldSummariesArgs {
+    #[serde(default)]
+    world_ids: Vec<String>,
+}
+
+async fn app__world_summaries_get(
+    state: Arc<RuntimeHostState>,
+    args: WorldSummariesArgs,
+) -> Result<HashMap<String, vrcx_0_contracts::WorldSummaryOutput>, CommandError> {
+    let db = Arc::clone(state.database());
+    let ids = args.world_ids;
+    let rows = blocking("world summaries", move || {
+        vrcx_0_persistence::worlds::world_cache_get_many(&db, &ids)
+    })
+    .await?;
+    Ok(rows.into_iter().map(|row| (row.id.clone(), row)).collect())
 }
 
 /// Room history: the same upstream command the desktop's 房间历史 page calls.
@@ -1117,6 +1145,12 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         _,
         _,
     >("app__instance_history_query", app__instance_history_query);
+    registry.register_typed::<
+        WorldSummariesArgs,
+        HashMap<String, vrcx_0_contracts::WorldSummaryOutput>,
+        _,
+        _,
+    >("app__world_summaries_get", app__world_summaries_get);
     registry.register_typed::<serde_json::Value, serde_json::Value, _, _>(
         "app__vrchat_avatar_styles_get",
         app__vrchat_avatar_styles_get,
@@ -1430,7 +1464,7 @@ mod tests {
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 61);
+        assert_eq!(registry.len(), 62);
     }
 }
 
