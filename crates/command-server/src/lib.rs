@@ -79,12 +79,20 @@ pub type CommandHandler<S> = Arc<dyn Fn(Arc<S>, Value) -> CommandFuture + Send +
 /// Command name → handler, generic over the host state type `S`.
 pub struct CommandRegistry<S> {
     handlers: HashMap<&'static str, CommandHandler<S>>,
+    /// Command name → (`Input` type name, `Output` type name).
+    ///
+    /// Captured at registration because `register_typed` erases the types when it boxes the handler:
+    /// afterwards nothing in the registry remembers what a command takes or returns, which is why the
+    /// phone's Kotlin wrappers had to spell every envelope shape by hand - and got some of them wrong.
+    /// These names are for binding generators; the runtime never reads them.
+    signatures: HashMap<&'static str, (&'static str, &'static str)>,
 }
 
 impl<S> Default for CommandRegistry<S> {
     fn default() -> Self {
         Self {
             handlers: HashMap::new(),
+            signatures: HashMap::new(),
         }
     }
 }
@@ -122,6 +130,8 @@ where
         Fut: Future<Output = Result<Out, CommandError>> + Send + 'static,
     {
         let handler = Arc::new(handler);
+        self.signatures
+            .insert(name, (std::any::type_name::<In>(), std::any::type_name::<Out>()));
         self.register(name, move |state, args| {
             let handler = Arc::clone(&handler);
             async move {
@@ -144,6 +154,20 @@ where
 
     pub fn contains(&self, name: &str) -> bool {
         self.handlers.contains_key(name)
+    }
+
+    /// The command surface as `(name, input type, output type)`, sorted by name.
+    ///
+    /// For binding generators only: a command registered through [`Self::register`] (raw
+    /// `serde_json::Value` in and out) has no signature and does not appear here.
+    pub fn signatures(&self) -> Vec<(&'static str, &'static str, &'static str)> {
+        let mut rows: Vec<_> = self
+            .signatures
+            .iter()
+            .map(|(name, (input, output))| (*name, *input, *output))
+            .collect();
+        rows.sort_by_key(|(name, _, _)| *name);
+        rows
     }
 
     pub fn dispatch(

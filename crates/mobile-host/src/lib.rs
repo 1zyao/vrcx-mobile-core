@@ -1546,6 +1546,73 @@ async fn app__favorite_list(
     Ok(rows)
 }
 
+/// The command surface with the types each command takes and returns.
+///
+/// Read-only: it builds the same registry `build_bus` does, but without a host state, so it can run
+/// anywhere. A binding generator consumes this instead of every caller spelling envelope shapes by
+/// hand - the `{"input": …}` / `{"query": …}` split is exactly where the hand-written wrappers went
+/// wrong (`app__config_set_values` silently failed because it expected no wrapper at all).
+pub fn command_shapes() -> serde_json::Value {
+    let registry = build_registry();
+    let commands: Vec<serde_json::Value> = registry
+        .signatures()
+        .into_iter()
+        .map(|(name, input, output)| {
+            let (envelope, input_type) = shape_of(input);
+            serde_json::json!({
+                "cmd": name,
+                // `type_name` renders as `crate::module::Type`; the leaf is what a generator maps.
+                "input": input,
+                "output": output,
+                "envelope": envelope,
+                "inputType": input_type,
+                "outputType": leaf(output),
+            })
+        })
+        .collect();
+    serde_json::json!({
+        "total": registry.len(),
+        "withSignature": commands.len(),
+        "commands": commands,
+    })
+}
+
+/// The argument envelope a wrapper type implies, plus the type it carries.
+///
+/// This is the piece the hand-written Kotlin wrappers had to guess, and guessed wrong:
+/// `InputArgs<T>` takes `{"input": {…: T}}`, `QueryArgs<T>` takes `{"query": {…: T}}`, and a bare `T`
+/// takes its own fields at the top level. Reading it off the type makes it a fact instead of a guess.
+fn shape_of(input: &'static str) -> (&'static str, &'static str) {
+    let inner = match (input.find('<'), input.rfind('>')) {
+        (Some(open), Some(close)) if close > open => &input[open + 1..close],
+        _ => input,
+    };
+    let envelope = if input.starts_with("vrcx_0_mobile_host::InputArgs<") {
+        "input"
+    } else if input.starts_with("vrcx_0_mobile_host::QueryArgs<") {
+        "query"
+    } else {
+        "flat"
+    };
+    (envelope, leaf(inner))
+}
+
+fn leaf(type_name: &str) -> &str {
+    type_name.rsplit("::").next().unwrap_or(type_name)
+}
+
+#[cfg(test)]
+mod shapes {
+    /// Prints the command surface so it can be diffed against the Kotlin wrappers.
+    ///
+    /// Run with `cargo test -p vrcx-0-mobile-host dump_command_shapes -- --nocapture`.
+    #[test]
+    fn dump_command_shapes() {
+        let shapes = super::command_shapes();
+        println!("{}", serde_json::to_string_pretty(&shapes).expect("serialize"));
+    }
+}
+
 
 
 
