@@ -3320,7 +3320,18 @@
                     "last_pulled": "上次下载",
                     "ops_count": "{count} 条",
                     "this_device_tag": "本机",
-                    "writing_tag": "正在写入"
+                    "writing_tag": "正在写入",
+                    "health_label": "健康度",
+                    "health_unhealthy": "不健康（已弃权）",
+                    "health_healthy": "正常",
+                    "health_websocketUnstable": "连接不稳定",
+                    "health_authExpired": "登录已过期",
+                    "health_syncFailing": "同步连续失败",
+                    "health_recovering": "恢复中",
+                    "health_disabled": "已关闭采集",
+                    "health_yielded": "让位给更高优先级设备",
+                    "self_collecting": "本机正在采集（动态实时）",
+                    "self_not_collecting": "本机未采集：{reason}"
                 },
                 "phase": {
                     "idle": "空闲",

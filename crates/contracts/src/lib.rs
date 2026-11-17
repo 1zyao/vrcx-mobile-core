@@ -1,10 +1,11 @@
-pub mod collector_gate;
 pub mod activity;
 pub mod activity_page;
 pub mod activity_view;
 mod avatar;
 pub mod background_image;
 pub mod browse_history;
+pub mod collector_gate;
+pub mod collector_health;
 mod community_theme;
 pub mod community_theme_protocol;
 mod data_dir_migration;
@@ -44,6 +45,8 @@ pub use avatar::{
     AvatarTagInput, AvatarTagOutput, AvatarTagsPatchInput, AvatarTimeSpentOutput, AvatarUsageRow,
     AvatarWearSegment,
 };
+pub use collector_gate::{is_live_feed_collector, set_live_feed_collector};
+pub use collector_health::{HealthReason, HealthSnapshot};
 pub use community_theme::{
     CommunityThemeAuthor, CommunityThemeCatalog, CommunityThemeManifest, CommunityThemeStatsById,
     CommunityThemeStatsEntry,
@@ -80,14 +83,14 @@ pub use profile_backup::{
     ProfileRestoreValidationOutcome,
 };
 pub use profile_config::{resolve_config_key, ConfigMutation, ConfigReadEntry, ConfigWriteEntry};
-pub use collector_gate::{is_live_feed_collector, set_live_feed_collector};
 pub use sync::{
-    is_config_key_syncable, DEVICE_ROLE_AUTO, DEVICE_ROLE_FORCED, looks_like_user_prefix, register_sync_table, register_sync_table_owned,
+    is_config_key_syncable, looks_like_user_prefix, register_sync_table, register_sync_table_owned,
     resolve_sync_table, sync_table_descriptor, SyncBootstrapProgress, SyncConnectionFields,
     SyncConnectionInput, SyncConnectionTestResult, SyncCycleRecord, SyncDeviceRecord,
     SyncFieldSemantic, SyncHlc, SyncOpKind, SyncOpRecord, SyncRowSemantic, SyncStatusSnapshot,
-    SyncTableDescriptor, SyncTableOpCount, SyncTableProgress, SyncTableRef,
-    SYNC_EXCLUDED_CONFIG_KEYS, SYNC_PROTOCOL_SCHEMA_VERSION, SYNC_TABLE_CATALOG,
+    SyncTableDescriptor, SyncTableOpCount, SyncTableProgress, SyncTableRef, DEVICE_ROLE_AUTO,
+    DEVICE_ROLE_FORCED, SYNC_EXCLUDED_CONFIG_KEYS, SYNC_PROTOCOL_SCHEMA_VERSION,
+    SYNC_TABLE_CATALOG,
 };
 pub use translation::TranslationProvider;
 pub use vrchat_api::{

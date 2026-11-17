@@ -318,6 +318,8 @@ impl RemoteSyncEngine {
             pulled: counts.pulled,
             error: None,
         });
+        // A clean cycle clears the failure streak in the health tracker.
+        vrcx_0_contracts::collector_health::record_sync_cycle(true);
         let mut state = self
             .state
             .lock()
@@ -340,6 +342,7 @@ impl RemoteSyncEngine {
             pulled: 0,
             error: Some(message.to_string()),
         });
+        vrcx_0_contracts::collector_health::record_sync_cycle(false);
     }
 
     fn append_cycle_history(&self, record: &SyncCycleRecord) {
@@ -397,6 +400,7 @@ impl RemoteSyncEngine {
                     device_name: self.device_name.clone(),
                     role: collector_role,
                     priority: self.collector_priority(),
+                    health: vrcx_0_contracts::collector_health::snapshot().score as i32,
                     ..SyncDeviceRecord::default()
                 })
                 .await;
@@ -914,6 +918,22 @@ impl RemoteSyncEngine {
             last_error,
             remote_schema_version,
             remote_devices,
+            collector_health: vrcx_0_contracts::collector_health::snapshot().score as i64,
+            collector_reason: sync_meta_get(&self.db, "sync.collectorReason")
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| "healthy".to_string()),
+            collector_blockers: sync_meta_get(&self.db, "sync.collectorBlockers")
+                .ok()
+                .flatten()
+                .map(|raw| {
+                    raw.split(',')
+                        .map(str::trim)
+                        .filter(|id| !id.is_empty())
+                        .map(str::to_string)
+                        .collect()
+                })
+                .unwrap_or_default(),
         }
     }
 }

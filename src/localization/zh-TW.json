@@ -3320,7 +3320,18 @@
                     "last_pulled": "上次下載",
                     "ops_count": "{count} 條",
                     "this_device_tag": "本機",
-                    "writing_tag": "正在寫入"
+                    "writing_tag": "正在寫入",
+                    "health_label": "健康度",
+                    "health_unhealthy": "不健康（已棄權）",
+                    "health_healthy": "正常",
+                    "health_websocketUnstable": "連線不穩定",
+                    "health_authExpired": "登入已過期",
+                    "health_syncFailing": "同步連續失敗",
+                    "health_recovering": "恢復中",
+                    "health_disabled": "已關閉採集",
+                    "health_yielded": "讓位給更高優先級裝置",
+                    "self_collecting": "本機正在採集（動態即時）",
+                    "self_not_collecting": "本機未採集：{reason}"
                 },
                 "phase": {
                     "idle": "閒置",

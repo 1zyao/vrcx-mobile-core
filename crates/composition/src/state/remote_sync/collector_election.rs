@@ -121,7 +121,14 @@ fn peer_is_fresh(device: &SyncDeviceRecord, window: Duration) -> bool {
 }
 
 /// Whether `peer` outranks this device (priority first, then device id).
+///
+/// A peer that reported itself unhealthy (`health == 0`) is skipped: it has
+/// already handed collection over, so it must not block a healthy device even
+/// when its priority is higher.
 fn peer_outranks(own_device_id: &str, own_priority: i32, peer: &SyncDeviceRecord) -> bool {
+    if peer.health <= 0 {
+        return false;
+    }
     let peer_priority = effective_priority(&peer.role, peer.priority);
     peer_priority > own_priority
         || (peer_priority == own_priority && peer.device_id.as_str() < own_device_id)
@@ -162,10 +169,18 @@ pub fn may_collect(
     own_device_id: &str,
     own_role: &str,
     own_priority: i32,
+    own_healthy: bool,
     devices: &[SyncDeviceRecord],
     window: Duration,
 ) -> bool {
-    own_role != "off" && blockers(own_device_id, own_role, own_priority, devices, window).is_empty()
+    if own_role == "off" {
+        return false;
+    }
+    // Priority is intent; a degraded device hands the feed over voluntarily.
+    if !own_healthy {
+        return false;
+    }
+    blockers(own_device_id, own_role, own_priority, devices, window).is_empty()
 }
 
 /// Evaluate the election once and apply it to the write gate.
@@ -190,7 +205,15 @@ pub async fn evaluate(host: &Arc<RemoteSyncHost>) -> (bool, Vec<String>) {
     }
 
     let blocking = blockers(&device_id, &role, priority, &status.remote_devices, window);
-    let may = may_collect(&device_id, &role, priority, &status.remote_devices, window);
+    let health = vrcx_0_contracts::collector_health::snapshot();
+    let may = may_collect(
+        &device_id,
+        &role,
+        priority,
+        health.is_healthy(),
+        &status.remote_devices,
+        window,
+    );
 
     // Record the decision in `_sync_meta` (per-device, never synced) so it can
     // be inspected without a UI:
@@ -211,6 +234,17 @@ pub async fn evaluate(host: &Arc<RemoteSyncHost>) -> (bool, Vec<String>) {
         "sync.collectorBlockers",
         &blocking.join(","),
     );
+    // Human-facing reason, mirrored into `SyncStatusSnapshot` for the settings UI.
+    let reason = if role == "off" {
+        "disabled"
+    } else if !health.is_healthy() {
+        health.reason
+    } else if !blocking.is_empty() {
+        "yielded"
+    } else {
+        "healthy"
+    };
+    let _ = vrcx_0_persistence::sync::sync_meta_set(host.db(), "sync.collectorReason", reason);
 
     // Flip the write gate only; the websocket stays up so the UI remains live
     // and the rows arrive through sync instead.
@@ -257,6 +291,9 @@ mod tests {
             device_id: id.to_string(),
             role: role.to_string(),
             priority,
+            // Peers advertise 100 unless they degrade themselves; an unset value
+            // would read as "unhealthy" and silently drop them from the ranking.
+            health: 100,
             seen_seconds_ago: seen,
             online: seen.abs() <= ACTIVITY_WINDOW.as_secs() as i64,
             ..Default::default()
@@ -264,7 +301,7 @@ mod tests {
     }
 
     fn may(id: &str, role: &str, priority: i32, peers: &[SyncDeviceRecord]) -> bool {
-        may_collect(id, role, priority, peers, ACTIVITY_WINDOW)
+        may_collect(id, role, priority, true, peers, ACTIVITY_WINDOW)
     }
 
     #[test]
@@ -301,8 +338,18 @@ mod tests {
         let second = device("bbb", DEVICE_ROLE_AUTO, 10, 5);
         let server = device("srv", DEVICE_ROLE_AUTO, 0, 5);
 
-        assert!(may("aaa", DEVICE_ROLE_AUTO, 20, &[main.clone(), second.clone(), server.clone()]));
-        assert!(!may("bbb", DEVICE_ROLE_AUTO, 10, &[main.clone(), second.clone(), server.clone()]));
+        assert!(may(
+            "aaa",
+            DEVICE_ROLE_AUTO,
+            20,
+            &[main.clone(), second.clone(), server.clone()]
+        ));
+        assert!(!may(
+            "bbb",
+            DEVICE_ROLE_AUTO,
+            10,
+            &[main.clone(), second.clone(), server.clone()]
+        ));
         assert!(!may("srv", DEVICE_ROLE_AUTO, 0, &[main, second, server]));
     }
 
@@ -312,8 +359,18 @@ mod tests {
         let second = device("bbb", DEVICE_ROLE_AUTO, 10, 5);
         let server = device("srv", DEVICE_ROLE_AUTO, 0, 5);
 
-        assert!(may("bbb", DEVICE_ROLE_AUTO, 10, &[stale_main.clone(), second.clone(), server.clone()]));
-        assert!(!may("srv", DEVICE_ROLE_AUTO, 0, &[stale_main, second, server]));
+        assert!(may(
+            "bbb",
+            DEVICE_ROLE_AUTO,
+            10,
+            &[stale_main.clone(), second.clone(), server.clone()]
+        ));
+        assert!(!may(
+            "srv",
+            DEVICE_ROLE_AUTO,
+            0,
+            &[stale_main, second, server]
+        ));
     }
 
     #[test]
@@ -322,13 +379,28 @@ mod tests {
         let stale_second = device("bbb", DEVICE_ROLE_AUTO, 10, 600);
         let server = device("srv", DEVICE_ROLE_AUTO, 0, 5);
 
-        assert!(may("srv", DEVICE_ROLE_AUTO, 0, &[stale_main, stale_second, server]));
+        assert!(may(
+            "srv",
+            DEVICE_ROLE_AUTO,
+            0,
+            &[stale_main, stale_second, server]
+        ));
     }
 
     #[test]
     fn equal_priority_falls_back_to_the_smaller_device_id() {
-        assert!(!may("me", DEVICE_ROLE_AUTO, 0, &[device("aaa", DEVICE_ROLE_AUTO, 0, 5)]));
-        assert!(may("me", DEVICE_ROLE_AUTO, 0, &[device("zzz", DEVICE_ROLE_AUTO, 0, 5)]));
+        assert!(!may(
+            "me",
+            DEVICE_ROLE_AUTO,
+            0,
+            &[device("aaa", DEVICE_ROLE_AUTO, 0, 5)]
+        ));
+        assert!(may(
+            "me",
+            DEVICE_ROLE_AUTO,
+            0,
+            &[device("zzz", DEVICE_ROLE_AUTO, 0, 5)]
+        ));
     }
 
     #[test]
@@ -337,23 +409,70 @@ mod tests {
         let b = device("bbb", DEVICE_ROLE_FORCED, 0, 5);
         let all = vec![a, b];
 
-        assert!(may("aaa", DEVICE_ROLE_FORCED, 0, &all), "smaller id wins the tie");
+        assert!(
+            may("aaa", DEVICE_ROLE_FORCED, 0, &all),
+            "smaller id wins the tie"
+        );
         assert!(!may("bbb", DEVICE_ROLE_FORCED, 0, &all));
     }
 
     #[test]
     fn stale_peers_are_ignored() {
-        assert!(may("me", DEVICE_ROLE_AUTO, 0, &[device("aaa", DEVICE_ROLE_AUTO, 99, 600)]));
+        assert!(may(
+            "me",
+            DEVICE_ROLE_AUTO,
+            0,
+            &[device("aaa", DEVICE_ROLE_AUTO, 99, 600)]
+        ));
     }
 
     #[test]
     fn own_row_is_ignored() {
-        assert!(may("me", DEVICE_ROLE_AUTO, 0, &[device("me", DEVICE_ROLE_AUTO, 100, 0)]));
+        assert!(may(
+            "me",
+            DEVICE_ROLE_AUTO,
+            0,
+            &[device("me", DEVICE_ROLE_AUTO, 100, 0)]
+        ));
     }
 
     #[test]
     fn negative_priority_yields_to_default() {
-        assert!(!may("me", DEVICE_ROLE_AUTO, -5, &[device("aaa", DEVICE_ROLE_AUTO, 0, 5)]));
+        assert!(!may(
+            "me",
+            DEVICE_ROLE_AUTO,
+            -5,
+            &[device("aaa", DEVICE_ROLE_AUTO, 0, 5)]
+        ));
+    }
+
+    #[test]
+    fn an_unhealthy_peer_never_blocks_a_healthy_device() {
+        // A higher-priority peer that degraded itself must not hold the feed.
+        let mut degraded = device("aaa", DEVICE_ROLE_AUTO, 99, 5);
+        degraded.health = 0;
+        assert!(may("me", DEVICE_ROLE_AUTO, 0, &[degraded]));
+    }
+
+    #[test]
+    fn an_unhealthy_device_does_not_collect_even_at_top_priority() {
+        let peers: Vec<SyncDeviceRecord> = Vec::new();
+        assert!(!may_collect(
+            "me",
+            DEVICE_ROLE_AUTO,
+            100,
+            false,
+            &peers,
+            ACTIVITY_WINDOW
+        ));
+        assert!(may_collect(
+            "me",
+            DEVICE_ROLE_AUTO,
+            100,
+            true,
+            &peers,
+            ACTIVITY_WINDOW
+        ));
     }
 
     #[test]

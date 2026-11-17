@@ -1204,6 +1204,17 @@ pub fn apply_pulled_ops(
     let mut plans: HashMap<String, Vec<String>> = HashMap::new();
     for table in tables {
         ensure_synced_table_exists(db, table)?;
+        if !table_exists(db, table)? {
+            // A table this host never instantiates (desktop-only read models such
+            // as `browse_history`). Skipping its ops keeps the rest of the batch
+            // flowing; failing here would stall the whole sync cycle on a host
+            // that simply has no such table.
+            tracing::warn!(
+                table = %table,
+                "skipping pulled ops for a table this host does not have"
+            );
+            continue;
+        }
         let columns = table_columns(db, table)?;
         plans.insert(table.to_string(), columns);
     }

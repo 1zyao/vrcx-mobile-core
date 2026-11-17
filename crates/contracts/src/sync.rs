@@ -724,6 +724,17 @@ pub struct SyncStatusSnapshot {
     /// restarts).
     #[serde(default)]
     pub cycle_history: Vec<SyncCycleRecord>,
+    /// This device's own health score (0 degraded, 100 healthy).
+    #[serde(default)]
+    pub collector_health: i64,
+    /// Why this device is or is not collecting, as a stable machine reason:
+    /// `healthy`, `websocketUnstable`, `authExpired`, `syncFailing`,
+    /// `recovering`, `disabled`, `yielded`.
+    #[serde(default)]
+    pub collector_reason: String,
+    /// Devices this one is currently yielding to (empty when it collects).
+    #[serde(default)]
+    pub collector_blockers: Vec<String>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, specta::Type)]
@@ -752,6 +763,13 @@ pub struct SyncDeviceRecord {
     /// the server only collects while every desktop is off.
     #[serde(default)]
     pub priority: i32,
+    /// Health score the device reports in `_sync_devices.health` (0 or 100).
+    ///
+    /// Priority is intent; health is capability. A device at score 0 has handed
+    /// collection over on its own (websocket flapping, expired session, sync
+    /// failures) and never blocks a healthy peer.
+    #[serde(default)]
+    pub health: i32,
     /// Server-captured client address (PostgreSQL inet_client_addr).
     #[serde(default)]
     pub ip_addr: String,

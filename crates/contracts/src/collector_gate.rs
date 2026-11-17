@@ -46,7 +46,10 @@ mod tests {
         assert!(is_live_feed_collector(), "fail-open default");
         assert!(set_live_feed_collector(false), "first flip reports change");
         assert!(!is_live_feed_collector());
-        assert!(!set_live_feed_collector(false), "same value is not a change");
+        assert!(
+            !set_live_feed_collector(false),
+            "same value is not a change"
+        );
         assert!(set_live_feed_collector(true));
         assert!(is_live_feed_collector());
     }

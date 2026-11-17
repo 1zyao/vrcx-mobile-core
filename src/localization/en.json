@@ -3331,7 +3331,18 @@
                     "last_pulled": "Last download",
                     "ops_count": "{count} ops",
                     "this_device_tag": "This device",
-                    "writing_tag": "Writing now"
+                    "writing_tag": "Writing now",
+                    "health_label": "Health",
+                    "health_unhealthy": "Unhealthy (yielded)",
+                    "health_healthy": "OK",
+                    "health_websocketUnstable": "Connection unstable",
+                    "health_authExpired": "Session expired",
+                    "health_syncFailing": "Sync failing repeatedly",
+                    "health_recovering": "Recovering",
+                    "health_disabled": "Collection disabled",
+                    "health_yielded": "Yielding to a higher-priority device",
+                    "self_collecting": "This device is recording live feed",
+                    "self_not_collecting": "This device is not recording: {reason}"
                 },
                 "phase": {
                     "idle": "Idle",
