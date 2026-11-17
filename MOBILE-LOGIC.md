@@ -1119,3 +1119,46 @@ CoreJson（命令总线）：只有 ignoreUnknownKeys + isLenient
 ### 第 58 轮：终态回归 sweep
 
 见下方"终态"一节。
+
+## 第 59 轮：冷启动验证
+
+分两条路径验，因为**我不能清手机数据**（会删掉登录态和 597MB 的库，而我无法代替用户登录）。
+
+### 路径 A：全新数据目录（新用户首次安装）
+
+`--command-bus-only` + 空目录，宿主**正常启动**并建出 `VRCX-0.sqlite3` / `ImageCache` /
+`diagnostics`，命令逐条回答：
+
+```
+sync__status     -> {"configured":false,"enabled":false,"cycleHistory":[],"deviceId":"32ee1174…"}
+user_get         -> {"data":"{\"error\":{\"message\":\"Missing Credentials\",\"status_code\":401}}","status":401}
+feed_rows_query  -> badRequest / missing field `userId`
+notification_list_query -> badRequest / missing field `userId`
+```
+
+两条结论：
+
+- 全新安装下同步报告 **未配置** —— 这正是设置页那张卡片在"没有共享库"时会显示的状态，此前只有推断，现在有实测。
+- 需要登录的读给出 **401 + 可读消息**，不是崩溃。
+- `feed_rows_query` / `notification_list_query` 要求 `userId`（动态表按 owner 前缀存放），手机端的
+  `feedQuery` / `notificationListQuery` 都从会话取 userId 传下去；登录前不走这两个读。
+
+**另一条边界**：完整模式（不加 `--command-bus-only`）在空目录下**直接退出**（exit=1）：
+
+```
+headless login failed: No saved account is available for headless login.
+```
+
+这是设计如此 —— headless 宿主需要已保存的账号才能跑。新服务器部署必须先登录一次。
+
+### 路径 B：手机清缓存后冷启动
+
+`run-as rm -rf cache` 后冷启动：首页正常渲染（5 个房间、封面、人数），
+**0 条 proxy**、无异常。说明磁盘缓存被清空不影响任何数据路径 —— 图片会重新取，
+而不是"没有缓存就空白"。
+
+### 一处我判断错的"死代码"
+
+我看到 `feedRows` 在 `commonMain` 里没有调用者，判定为死代码并删除，结果
+`androidMain/MainActivity.kt` 编译失败 —— 它是 Android 调试入口在用的。
+**grep 必须覆盖所有 source set，不能只搜 commonMain。**已恢复，并在注释里写明它与 `feedQuery` 的分工。
