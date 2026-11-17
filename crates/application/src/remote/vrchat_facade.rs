@@ -446,6 +446,27 @@ impl VrchatRemoteFacade {
         .await
     }
 
+    /// One avatar by id (`GET avatars/{id}`).
+    ///
+    /// Cloud has no command for this exact read: its `app__avatar_get` is a *local* cache read,
+    /// and its per-avatar paths go through the list command or the avatar gallery. This wraps the
+    /// protocol builder so the phone has one round trip for a single avatar instead of fetching a
+    /// list to find it.
+    pub async fn avatar_get(&self, avatar_id: String) -> Result<VrchatResponse> {
+        let (avatar_id, request) =
+            vrcx_0_vrchat_protocol::avatars::avatar_get_input(
+                VRCHAT_API_DEFAULT_ENDPOINT.into(),
+                avatar_id,
+            )?;
+        self.execute(
+            "app__vrchat_avatar_get",
+            format!("Getting avatar {avatar_id}."),
+            request,
+            VrchatScope::Vrchat,
+        )
+        .await
+    }
+
     pub async fn instance_get(
         &self,
         world_id: String,

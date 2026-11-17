@@ -608,6 +608,25 @@ struct AvatarListByUserInput {
     release_status: vrcx_0_contracts::vrchat_requests::ReleaseStatusFilter,
 }
 
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AvatarGetArgs {
+    #[serde(default)]
+    avatar_id: String,
+}
+
+async fn app__vrchat_avatar_get(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<AvatarGetArgs>,
+) -> Result<serde_json::Value, CommandError> {
+    let response = state
+        .vrchat_remote()
+        .avatar_get(args.input.avatar_id)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
 async fn app__vrchat_avatar_list_by_user_get(
     state: Arc<RuntimeHostState>,
     args: InputArgs<AvatarListByUserInput>,
@@ -904,6 +923,10 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         "app__vrchat_search_worlds_get",
         app__vrchat_search_worlds_get,
     );
+    registry.register_typed::<InputArgs<AvatarGetArgs>, serde_json::Value, _, _>(
+        "app__vrchat_avatar_get",
+        app__vrchat_avatar_get,
+    );
     registry.register_typed::<InputArgs<AvatarListByUserInput>, serde_json::Value, _, _>(
         "app__vrchat_avatar_list_by_user_get",
         app__vrchat_avatar_list_by_user_get,
@@ -1080,7 +1103,7 @@ mod tests {
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 48);
+        assert_eq!(registry.len(), 49);
     }
 }
 
@@ -1220,6 +1243,9 @@ async fn app__favorite_list(
     .map_err(|error| CommandError::failed(error.to_string()))?;
     Ok(rows)
 }
+
+
+
 
 
 
