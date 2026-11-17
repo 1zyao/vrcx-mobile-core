@@ -8,6 +8,7 @@ description = "Command set for the in-process phone core"
 [dependencies]
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+specta = { workspace = true }
 tokio = { workspace = true, features = ["rt", "macros", "sync"] }
 vrcx-0-application = { path = "../application" }
 vrcx-0-application-core = { path = "../application-core" }

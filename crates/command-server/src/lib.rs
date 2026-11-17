@@ -86,6 +86,8 @@ pub struct CommandRegistry<S> {
     /// phone's Kotlin wrappers had to spell every envelope shape by hand - and got some of them wrong.
     /// These names are for binding generators; the runtime never reads them.
     signatures: HashMap<&'static str, (&'static str, &'static str)>,
+    /// Type graph for every type registered through [`Self::register_typed`].
+    types: specta::Types,
 }
 
 impl<S> Default for CommandRegistry<S> {
@@ -93,6 +95,7 @@ impl<S> Default for CommandRegistry<S> {
         Self {
             handlers: HashMap::new(),
             signatures: HashMap::new(),
+            types: specta::Types::default(),
         }
     }
 }
@@ -124,14 +127,19 @@ where
     /// adapter crate does.
     pub fn register_typed<In, Out, F, Fut>(&mut self, name: &'static str, handler: F)
     where
-        In: serde::de::DeserializeOwned + Send + 'static,
-        Out: Serialize + 'static,
+        In: serde::de::DeserializeOwned + specta::Type + Send + 'static,
+        Out: Serialize + specta::Type + 'static,
         F: Fn(Arc<S>, In) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = Result<Out, CommandError>> + Send + 'static,
     {
         let handler = Arc::new(handler);
         self.signatures
             .insert(name, (std::any::type_name::<In>(), std::any::type_name::<Out>()));
+        // Collect the type graph too, so a binding generator can emit real data classes instead of
+        // every caller re-declaring the payload shapes (which is how the phone ended up with a
+        // second, drifting copy of the contract).
+        self.types.register_mut::<In>();
+        self.types.register_mut::<Out>();
         self.register(name, move |state, args| {
             let handler = Arc::clone(&handler);
             async move {
@@ -142,6 +150,11 @@ where
                     .map_err(|error| CommandError::failed(error.to_string()))
             }
         });
+    }
+
+    /// The type graph collected from typed registrations, for binding generators.
+    pub fn types(&self) -> &specta::Types {
+        &self.types
     }
 
     pub fn len(&self) -> usize {

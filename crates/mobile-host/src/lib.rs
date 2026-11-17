@@ -32,7 +32,7 @@ where
 }
 
 /// Mirrors cloud's `VrchatFavoriteGroupsInput`.
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct FavoriteGroupsInput {
     #[serde(default)]
@@ -128,7 +128,7 @@ async fn app__vrchat_group_leave(
 
 /// Mirrors cloud's `VrchatFavoriteAddInput`; `favoriteId` is the ENTITY id
 /// (world/avatar/user), which is how VRCX addresses favourites.
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct FavoriteAddInput {
     #[serde(rename = "type")]
@@ -140,7 +140,7 @@ struct FavoriteAddInput {
 }
 
 /// Mirrors cloud's `VrchatFavoriteDeleteInput` - an entity id, not a record id.
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct FavoriteDeleteInput {
     #[serde(default)]
@@ -177,7 +177,7 @@ async fn app__vrchat_favorite_delete(
 }
 
 /// Mirrors cloud's `VrchatFavoriteWorldsInput`; the request goes to `worlds/favorites`.
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct FavoriteWorldsInput {
     #[serde(default)]
@@ -211,7 +211,7 @@ async fn app__vrchat_favorite_worlds_get(
 /// parameter (`arg(&args, "query")` in cloud/crates/server/src/commands/local.rs), so
 /// the wire shape is `{"query": {...}}`. Keeping the same shape here is what makes
 /// VRCM literally the same frontend as the React app.
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct QueryArgs<T> {
     query: T,
@@ -263,7 +263,7 @@ async fn app__notification_list_query(
 /// (cloud/crates/server/src/commands/local_data_queries.rs:800), unlike the
 /// `query`-enveloped list commands above, so the wire shape is
 /// `{"input": {"worldId": …}}` and stays that way here.
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct WorldGetArgs {
     input: vrcx_0_contracts::WorldGetInput,
@@ -372,7 +372,7 @@ async fn app__config_list_values(
 /// `app__config_set_values` takes a flat `entries` array, exactly as the desktop reads it
 /// (`arg(&args, "entries")`). Wrapping it in `input` - which the first version did - makes every
 /// save fail deserialisation, and a caller that swallows the error sees nothing happen.
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct ConfigRemoveArgs {
     #[serde(default)]
@@ -510,14 +510,14 @@ async fn app__vrchat_avatar_styles_get(
 /// Canonical argument envelope for commands whose single parameter is named `input`.
 ///
 /// Cloud wraps these as `arg(&args, "input")`, so the wire shape is `{"input": {...}}`.
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct InputArgs<T> {
     input: T,
 }
 
 /// Mirrors cloud's `FriendUserInput` (`{"input":{"userId":"…"}}`).
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct FriendUserInput {
     user_id: String,
@@ -525,14 +525,14 @@ struct FriendUserInput {
 
 /// Mirrors cloud's `SearchUsersInput`; `params` is the facade's own parameter type, so
 /// the JSON is whatever that type already deserialises.
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct SearchUsersInput {
     params: vrcx_0_contracts::vrchat_requests::UserSearchParams,
 }
 
 /// Mirrors cloud's `SearchGroupsInput`.
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct SearchGroupsInput {
     params: vrcx_0_contracts::vrchat_requests::GroupSearchParams,
@@ -579,7 +579,7 @@ async fn sync__trigger_now(
         .map_err(|error| CommandError::failed(error.to_string()))
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct SyncTestConnectionArgs {
     connection: vrcx_0_contracts::SyncConnectionInput,
@@ -614,7 +614,7 @@ async fn app__notification_mark_seen_batch(
         .map_err(|error| CommandError::failed(error.to_string()))
 }
 /// Mirrors the facade's file analysis input.
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct FileAnalysisArgs {
     #[serde(default)]
@@ -638,7 +638,7 @@ async fn app__vrchat_auth_file_analysis_get(
     serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
 }
 /// Cloud reads `fileUrlOrId` as a bare top-level argument.
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct FileMetadataGetArgs {
     #[serde(default)]
@@ -652,7 +652,7 @@ async fn app__file_metadata_get(
     Ok(state.file_metadata_get(args.file_url_or_id).await)
 }
 /// Mirrors cloud's `VrchatGroupUserGroupsInput`.
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct GroupUserGroupsInput {
     #[serde(default)]
@@ -683,7 +683,7 @@ async fn app__vrchat_user_represented_group_get(
     serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
 }
 /// Cloud reads `ownerUserId` as a bare top-level argument, not an `{input:{…}}` envelope.
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct LocalModerationListArgs {
     #[serde(default)]
@@ -706,7 +706,7 @@ async fn app__local_moderation_list(
     .await
 }
 /// Mirrors cloud's `SearchWorldsInput`.
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct SearchWorldsInput {
     #[serde(default)]
@@ -728,7 +728,7 @@ async fn app__vrchat_search_worlds_get(
     serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
 }
 /// Mirrors cloud's `AvatarListByUserInput`.
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct AvatarListByUserInput {
     #[serde(default)]
@@ -744,14 +744,14 @@ struct AvatarListByUserInput {
     release_status: vrcx_0_contracts::vrchat_requests::ReleaseStatusFilter,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct AvatarGetArgs {
     #[serde(default)]
     avatar_id: String,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct EconomyBalanceArgs {
     #[serde(default)]
@@ -782,14 +782,14 @@ async fn app__vrchat_inventory_get(
     serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct PrintGetArgs {
     #[serde(default)]
     print_id: String,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct MediaFilesArgs {
     #[serde(default)]
@@ -808,7 +808,7 @@ async fn app__vrchat_media_files_get(
     serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct PrintsArgs {
     #[serde(default)]
@@ -900,7 +900,7 @@ async fn app__vrchat_avatar_list_by_user_get(
     serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
 }
 /// Mirrors cloud's `UserGetInput` (only the id matters for the raw read).
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct UserGetInput {
     #[serde(default)]
@@ -908,7 +908,7 @@ struct UserGetInput {
 }
 
 /// Mirrors cloud's `UserProfileInput`.
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct UserProfileInput {
     #[serde(default)]
@@ -918,7 +918,7 @@ struct UserProfileInput {
 }
 
 /// Mirrors cloud's `VrchatGroupProfileInput`.
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct GroupProfileInput {
     #[serde(default)]
@@ -928,7 +928,7 @@ struct GroupProfileInput {
 }
 
 /// Mirrors cloud's `VrchatInstanceIdentityInput`.
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct InstanceIdentityInput {
     #[serde(default)]
@@ -1423,7 +1423,7 @@ mod tests {
 ///
 /// Returns the desktop's `HttpApiExecuteResponse` shape: `{ status, data }`, with
 /// `data` being the raw response body string.
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct WebExecuteInput {
     url: String,
@@ -1487,7 +1487,7 @@ async fn app__debug_emit_event(
     Ok(serde_json::json!({ "published": input.name }))
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct DebugEmitInput {
     name: String,
@@ -1522,7 +1522,7 @@ impl vrcx_0_application_core::RuntimeEventSink for TeeSink {
 /// The favourites live in the local database that a recording node keeps; the phone
 /// only reads them. `FavoriteBaselineStore` is implemented by the persistence store,
 /// so no new data path is invented here.
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct FavoriteListArgs {
     kind: vrcx_0_core::FavoriteEntityKind,
