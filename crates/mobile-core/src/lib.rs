@@ -106,6 +106,68 @@ pub extern "system" fn Java_io_github_vrcmteam_vrcm_core_NativeCore_start(
         .unwrap_or(std::ptr::null_mut())
 }
 
+/// Starts the core through a plain C ABI, for hosts whose runtime has no JNI.
+///
+/// iOS is the reason this exists: `System.loadLibrary` + `external fun` is a JVM/ART mechanism, so the
+/// Android entry above cannot be called from Swift or Kotlin/Native. The two entry points do exactly the
+/// same job - start the core once, hand back `{port, token}` - and after that the protocol is loopback
+/// HTTP, so nothing else needs to cross the boundary.
+///
+/// `data_dir` is the platform's app data directory (`NSSearchPathForDirectoriesInDomains(.applicationSupportDirectory, …)`
+/// on iOS); the host creates its own `VRCX-0` folder inside it, exactly as on Android.
+///
+/// Returns a NUL-terminated JSON string that the caller must release with [`vrcx_core_free`]. An
+/// `{"error": …}` document means start-up failed - the same shape the Android entry returns, so one
+/// parser on the Kotlin/Swift side covers both.
+///
+/// # Safety
+///
+/// Both pointers must be valid NUL-terminated strings for the duration of the call.
+#[no_mangle]
+pub unsafe extern "C" fn vrcx_core_start(
+    data_dir: *const std::os::raw::c_char,
+    device_name: *const std::os::raw::c_char,
+) -> *mut std::os::raw::c_char {
+    let reply = (|| -> Result<String, String> {
+        if data_dir.is_null() {
+            return Err("data dir is null".to_string());
+        }
+        let dir = std::ffi::CStr::from_ptr(data_dir)
+            .to_str()
+            .map_err(|error| format!("data dir is not UTF-8: {error}"))?
+            .to_string();
+        let name = if device_name.is_null() {
+            String::new()
+        } else {
+            std::ffi::CStr::from_ptr(device_name)
+                .to_str()
+                .map_err(|error| format!("device name is not UTF-8: {error}"))?
+                .to_string()
+        };
+        let endpoint = start_core(Path::new(&dir), &name)?;
+        serde_json::to_string(&endpoint).map_err(|error| error.to_string())
+    })()
+    .unwrap_or_else(|message| serde_json::json!({ "error": message }).to_string());
+
+    // Interior NULs would truncate the string when the caller reads it, so replace them.
+    let reply = reply.replace('\0', " ");
+    std::ffi::CString::new(reply)
+        .map(|value| value.into_raw())
+        .unwrap_or(std::ptr::null_mut())
+}
+
+/// Releases a string returned by [`vrcx_core_start`].
+///
+/// # Safety
+///
+/// `value` must be a pointer returned by `vrcx_core_start` that has not been freed yet, or null.
+#[no_mangle]
+pub unsafe extern "C" fn vrcx_core_free(value: *mut std::os::raw::c_char) {
+    if !value.is_null() {
+        drop(std::ffi::CString::from_raw(value));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -127,7 +189,10 @@ mod tests {
 
         assert!(endpoint.port > 0, "ephemeral port assigned");
         assert!(endpoint.token.len() >= 43, "token is high entropy");
-        assert!(dir.join("VRCX-0.sqlite3").exists(), "sqlite opened");
+        assert!(
+            dir.join("VRCX-0").join("VRCX-0.sqlite3").exists(),
+            "sqlite opened in the app folder"
+        );
 
         let _ = std::fs::remove_dir_all(dir);
     }
@@ -158,6 +223,52 @@ mod tests {
         assert!(response.contains("\"result\":[]"), "unexpected body: {response}");
 
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// The C entry point works on this host, which is what iOS will call.
+    ///
+    /// Exercised here rather than on iOS because the code path is platform-independent: the ABI reads
+    /// two C strings, starts the same core and returns the same JSON. If this passes, the only thing
+    /// left for iOS is compiling the static library on a Mac.
+    #[test]
+    fn the_c_entry_point_starts_a_reachable_core() {
+        use std::ffi::{CStr, CString};
+
+        let dir = scratch_dir("c-abi");
+        let dir_c = CString::new(dir.to_string_lossy().to_string()).unwrap();
+        let name_c = CString::new("c-abi-device").unwrap();
+
+        let raw = unsafe { vrcx_core_start(dir_c.as_ptr(), name_c.as_ptr()) };
+        assert!(!raw.is_null(), "vrcx_core_start returned null");
+        let json = unsafe { CStr::from_ptr(raw) }.to_str().unwrap().to_string();
+        unsafe { vrcx_core_free(raw) };
+
+        assert!(!json.contains("\"error\""), "start failed: {json}");
+        let parsed: serde_json::Value = serde_json::from_str(&json).expect("json");
+        let port = parsed["port"].as_u64().expect("port") as u16;
+        assert!(parsed["token"].as_str().is_some_and(|t| t.len() >= 43), "token: {json}");
+        assert!(
+            dir.join("VRCX-0").join("VRCX-0.sqlite3").exists(),
+            "sqlite opened in the app folder"
+        );
+
+        // The port it returned must actually be serving.
+        std::net::TcpStream::connect(("127.0.0.1", port)).expect("connect to the reported port");
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// A null data dir must come back as an error document, not a crash.
+    #[test]
+    fn the_c_entry_point_reports_a_null_data_dir() {
+        use std::ffi::{CStr, CString};
+
+        let name_c = CString::new("c-abi-device").unwrap();
+        let raw = unsafe { vrcx_core_start(std::ptr::null(), name_c.as_ptr()) };
+        assert!(!raw.is_null(), "should still return a string");
+        let json = unsafe { CStr::from_ptr(raw) }.to_str().unwrap().to_string();
+        unsafe { vrcx_core_free(raw) };
+        assert!(json.contains("\"error\""), "expected error document, got {json}");
     }
 }
 
