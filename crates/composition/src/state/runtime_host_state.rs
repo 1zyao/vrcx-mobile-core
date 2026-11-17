@@ -1170,9 +1170,25 @@ impl RuntimeHostState {
             .map_err(|error| vrcx_0_application_core::Error::Custom(error.to_string()))
     }
 
-    /// Re-reads the sync config and restarts the engine with it.
-    pub async fn remote_sync_restart(
+    /// Deletes one config entry, returning how many rows went away.
+    ///
+    /// The third of the config trio the desktop exposes; without it a client can write a value but
+    /// never unset one.
+    pub async fn config_remove_value(
         &self,
+        key: String,
+    ) -> vrcx_0_application_core::Result<i64> {
+        let db = Arc::clone(&self.runtime_context.db);
+        tokio::task::spawn_blocking(move || vrcx_0_persistence::config::config_remove_value(&db, key))
+            .await
+            .map_err(|error| {
+                vrcx_0_application_core::Error::Custom(format!("config remove task failed: {error}"))
+            })?
+            .map_err(|error| vrcx_0_application_core::Error::Custom(error.to_string()))
+    }
+
+    /// Re-reads the sync config and restarts the engine with it.
+    pub async fn remote_sync_restart(        &self,
     ) -> vrcx_0_application_core::Result<()> {
         self.remote_sync_host
             .restart_from_config()
@@ -1181,5 +1197,6 @@ impl RuntimeHostState {
             .map_err(|error| vrcx_0_application_core::Error::Custom(error.to_string()))
     }
 }
+
 
 

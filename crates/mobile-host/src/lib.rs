@@ -372,6 +372,23 @@ async fn app__config_list_values(
 /// `app__config_set_values` takes a flat `entries` array, exactly as the desktop reads it
 /// (`arg(&args, "entries")`). Wrapping it in `input` - which the first version did - makes every
 /// save fail deserialisation, and a caller that swallows the error sees nothing happen.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ConfigRemoveArgs {
+    #[serde(default)]
+    key: String,
+}
+
+async fn app__config_remove_value(
+    state: Arc<RuntimeHostState>,
+    args: ConfigRemoveArgs,
+) -> Result<i64, CommandError> {
+    state
+        .config_remove_value(args.key)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))
+}
+
 async fn app__config_set_values(
     state: Arc<RuntimeHostState>,
     args: serde_json::Value,
@@ -1057,6 +1074,10 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         "app__config_list_values",
         app__config_list_values,
     );
+    registry.register_typed::<ConfigRemoveArgs, i64, _, _>(
+        "app__config_remove_value",
+        app__config_remove_value,
+    );
     registry.register_typed::<serde_json::Value, serde_json::Value, _, _>(
         "app__config_set_values",
         app__config_set_values,
@@ -1384,7 +1405,7 @@ mod tests {
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 60);
+        assert_eq!(registry.len(), 61);
     }
 }
 
@@ -1524,6 +1545,7 @@ async fn app__favorite_list(
     .map_err(|error| CommandError::failed(error.to_string()))?;
     Ok(rows)
 }
+
 
 
 
