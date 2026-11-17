@@ -332,6 +332,72 @@ struct SearchGroupsInput {
     params: vrcx_0_contracts::vrchat_requests::GroupSearchParams,
 }
 
+// --- remote sync (VRCX's own shared-database sync engine) ---
+//
+// The command names are `sync__*`, not `app__*`: cloud registers them this way and the frontend
+// calls them by that name, so the phone keeps the same surface.
+
+async fn sync__status(
+    state: Arc<RuntimeHostState>,
+    _args: serde_json::Value,
+) -> Result<vrcx_0_contracts::SyncStatusSnapshot, CommandError> {
+    Ok(state.remote_sync().status().await)
+}
+
+async fn sync__get_connection(
+    state: Arc<RuntimeHostState>,
+    _args: serde_json::Value,
+) -> Result<vrcx_0_contracts::SyncConnectionFields, CommandError> {
+    Ok(state.remote_sync().connection_fields())
+}
+
+async fn sync__bootstrap_progress(
+    state: Arc<RuntimeHostState>,
+    _args: serde_json::Value,
+) -> Result<vrcx_0_contracts::SyncBootstrapProgress, CommandError> {
+    Ok(state
+        .remote_sync()
+        .current()
+        .map(|engine| engine.bootstrap_progress())
+        .unwrap_or_default())
+}
+
+async fn sync__trigger_now(
+    state: Arc<RuntimeHostState>,
+    _args: serde_json::Value,
+) -> Result<vrcx_0_contracts::SyncStatusSnapshot, CommandError> {
+    state
+        .remote_sync()
+        .run_cycle_now()
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SyncTestConnectionArgs {
+    connection: vrcx_0_contracts::SyncConnectionInput,
+}
+
+async fn sync__test_connection(
+    state: Arc<RuntimeHostState>,
+    args: SyncTestConnectionArgs,
+) -> Result<vrcx_0_contracts::SyncConnectionTestResult, CommandError> {
+    let input = args.connection;
+    Ok(state
+        .remote_sync()
+        .test_connection(
+            &input.host,
+            input.port,
+            &input.user,
+            input.password.as_deref(),
+            &input.database,
+            input.tls_verify,
+            input.allow_plaintext,
+        )
+        .await)
+}
+
 async fn app__notification_mark_seen_batch(
     state: Arc<RuntimeHostState>,
     args: InputArgs<vrcx_0_application::social::NotificationMarkSeenBatchInput>,
@@ -713,6 +779,26 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         "app__notification_list_query",
         app__notification_list_query,
     );
+    registry.register_typed::<serde_json::Value, vrcx_0_contracts::SyncStatusSnapshot, _, _>(
+        "sync__status",
+        sync__status,
+    );
+    registry.register_typed::<serde_json::Value, vrcx_0_contracts::SyncConnectionFields, _, _>(
+        "sync__get_connection",
+        sync__get_connection,
+    );
+    registry.register_typed::<serde_json::Value, vrcx_0_contracts::SyncBootstrapProgress, _, _>(
+        "sync__bootstrap_progress",
+        sync__bootstrap_progress,
+    );
+    registry.register_typed::<serde_json::Value, vrcx_0_contracts::SyncStatusSnapshot, _, _>(
+        "sync__trigger_now",
+        sync__trigger_now,
+    );
+    registry.register_typed::<SyncTestConnectionArgs, vrcx_0_contracts::SyncConnectionTestResult, _, _>(
+        "sync__test_connection",
+        sync__test_connection,
+    );
     registry.register_typed::<
         InputArgs<vrcx_0_application::social::NotificationMarkSeenBatchInput>,
         vrcx_0_application::social::NotificationMarkSeenBatchResult,
@@ -884,7 +970,7 @@ mod tests {
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 37);
+        assert_eq!(registry.len(), 42);
     }
 }
 
@@ -1024,6 +1110,10 @@ async fn app__favorite_list(
     .map_err(|error| CommandError::failed(error.to_string()))?;
     Ok(rows)
 }
+
+
+
+
 
 
 

@@ -39,6 +39,12 @@ pub fn start_core(files_dir: &Path) -> Result<CoreEndpoint, String> {
     // The whole VRCX-0 runtime, assembled the same way the desktop and headless
     // hosts assemble it. Phone-specific extras are no-ops (see `host`).
     let host = host::build_host(files_dir)?;
+    // Installing the data services is what actually starts the background loops - including
+    // `remote_sync_host.start_auto()`, VRCX's shared-database sync. The desktop and headless hosts
+    // do this inside their runtime start; the phone host had no equivalent, so its core assembled
+    // everything and then ran none of it (measured: `_sync_meta.lastCycleAt` stayed at the value
+    // copied in from the desktop).
+    host.start_data_services();
     let token = generate_token().map_err(|error| format!("generate token: {error}"))?;
 
     let runtime = tokio::runtime::Builder::new_multi_thread()
