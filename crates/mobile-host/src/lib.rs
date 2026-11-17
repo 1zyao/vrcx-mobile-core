@@ -665,6 +665,25 @@ struct PrintGetArgs {
 
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct MediaFilesArgs {
+    #[serde(default)]
+    params: vrcx_0_contracts::vrchat_requests::MediaFileListParams,
+}
+
+async fn app__vrchat_media_files_get(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<MediaFilesArgs>,
+) -> Result<serde_json::Value, CommandError> {
+    let response = state
+        .vrchat_remote()
+        .media_files(args.input.params)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct PrintsArgs {
     #[serde(default)]
     user_id: String,
@@ -1044,6 +1063,10 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         _,
         _,
     >("app__vrchat_media_inventory_items_get", app__vrchat_inventory_get);
+    registry.register_typed::<InputArgs<MediaFilesArgs>, serde_json::Value, _, _>(
+        "app__vrchat_media_files_get",
+        app__vrchat_media_files_get,
+    );
     registry.register_typed::<InputArgs<PrintsArgs>, serde_json::Value, _, _>(
         "app__vrchat_media_prints_get",
         app__vrchat_media_prints_get,
@@ -1240,7 +1263,7 @@ mod tests {
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 56);
+        assert_eq!(registry.len(), 57);
     }
 }
 
@@ -1380,6 +1403,7 @@ async fn app__favorite_list(
     .map_err(|error| CommandError::failed(error.to_string()))?;
     Ok(rows)
 }
+
 
 
 
