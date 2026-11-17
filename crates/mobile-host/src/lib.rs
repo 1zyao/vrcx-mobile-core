@@ -799,9 +799,17 @@ struct AvatarListByUserInput {
 
 #[derive(serde::Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
+/// Same wire shape as upstream's `AvatarGetInput` (`runtime-host-desktop::local_data`):
+/// `{"input": {"avatarId": …, "full": bool, "fresh": bool}}`. The type is declared here because the
+/// phone has no `local_data`, but the JSON is the desktop's, so a client written against the desktop
+/// works unchanged. `full`/`fresh` are accepted and currently only `avatarId` is needed by the facade.
 struct AvatarGetArgs {
     #[serde(default)]
     avatar_id: String,
+    #[serde(default = "default_true")]
+    full: bool,
+    #[serde(default)]
+    fresh: bool,
 }
 
 #[derive(serde::Deserialize, specta::Type)]
@@ -918,7 +926,7 @@ async fn app__vrchat_avatar_select_fallback(
     serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
 }
 
-async fn app__vrchat_avatar_get(
+async fn app__avatar_get(
     state: Arc<RuntimeHostState>,
     args: InputArgs<AvatarGetArgs>,
 ) -> Result<serde_json::Value, CommandError> {
@@ -930,6 +938,87 @@ async fn app__vrchat_avatar_get(
     serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
 }
 
+/// Avatar usage ranking (`app__avatar_usage_ranking`), upstream's flat-argument shape.
+///
+/// The desktop hides this behind `local_data()`; the query itself is `persistence::avatars`, so the
+/// phone reads the same rows from its own database and returns the same JSON.
+#[derive(serde::Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+struct AvatarUsageRankingArgs {
+    #[serde(default)]
+    user_id: String,
+    #[serde(default)]
+    limit: i64,
+}
+
+async fn app__avatar_usage_ranking(
+    state: Arc<RuntimeHostState>,
+    args: AvatarUsageRankingArgs,
+) -> Result<serde_json::Value, CommandError> {
+    let db = Arc::clone(state.database());
+    let rows = blocking("avatar usage ranking", move || {
+        vrcx_0_persistence::avatars::avatar_usage_ranking(&db, args.user_id, args.limit)
+    })
+    .await?;
+    serde_json::to_value(rows).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+/// Wear segments for one avatar over a window (`app__avatar_wear_segments`).
+#[derive(serde::Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+struct AvatarWearSegmentsArgs {
+    #[serde(default)]
+    user_id: String,
+    #[serde(default)]
+    from_ms: i64,
+    #[serde(default)]
+    to_ms: i64,
+}
+
+async fn app__avatar_wear_segments(
+    state: Arc<RuntimeHostState>,
+    args: AvatarWearSegmentsArgs,
+) -> Result<serde_json::Value, CommandError> {
+    let db = Arc::clone(state.database());
+    let rows = blocking("avatar wear segments", move || {
+        vrcx_0_persistence::avatars::avatar_wear_segments(&db, args.user_id, args.from_ms, args.to_ms)
+    })
+    .await?;
+    serde_json::to_value(rows).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+/// Tags attached to one avatar (`app__avatar_tags_get`).
+#[derive(serde::Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+struct AvatarTagsGetArgs {
+    #[serde(default)]
+    avatar_id: String,
+}
+
+async fn app__avatar_tags_get(
+    state: Arc<RuntimeHostState>,
+    args: AvatarTagsGetArgs,
+) -> Result<serde_json::Value, CommandError> {
+    let db = Arc::clone(state.database());
+    let rows = blocking("avatar tags get", move || {
+        vrcx_0_persistence::avatars::avatar_tags_get(&db, args.avatar_id)
+    })
+    .await?;
+    serde_json::to_value(rows).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+/// Every avatar tag (`app__avatar_tags_list`).
+async fn app__avatar_tags_list(
+    state: Arc<RuntimeHostState>,
+    _args: serde_json::Value,
+) -> Result<serde_json::Value, CommandError> {
+    let db = Arc::clone(state.database());
+    let rows = blocking("avatar tags list", move || {
+        vrcx_0_persistence::avatars::avatar_tags_list(&db)
+    })
+    .await?;
+    serde_json::to_value(rows).map_err(|error| CommandError::failed(error.to_string()))
+}
 async fn app__vrchat_avatar_list_by_user_get(
     state: Arc<RuntimeHostState>,
     args: InputArgs<AvatarListByUserInput>,
@@ -1285,8 +1374,24 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         app__vrchat_avatar_select_fallback,
     );
     registry.register_typed::<InputArgs<AvatarGetArgs>, serde_json::Value, _, _>(
-        "app__vrchat_avatar_get",
-        app__vrchat_avatar_get,
+        "app__avatar_get",
+        app__avatar_get,
+    );
+    registry.register_typed::<AvatarUsageRankingArgs, serde_json::Value, _, _>(
+        "app__avatar_usage_ranking",
+        app__avatar_usage_ranking,
+    );
+    registry.register_typed::<AvatarWearSegmentsArgs, serde_json::Value, _, _>(
+        "app__avatar_wear_segments",
+        app__avatar_wear_segments,
+    );
+    registry.register_typed::<AvatarTagsGetArgs, serde_json::Value, _, _>(
+        "app__avatar_tags_get",
+        app__avatar_tags_get,
+    );
+    registry.register_typed::<serde_json::Value, serde_json::Value, _, _>(
+        "app__avatar_tags_list",
+        app__avatar_tags_list,
     );
     registry.register_typed::<InputArgs<AvatarListByUserInput>, serde_json::Value, _, _>(
         "app__vrchat_avatar_list_by_user_get",
@@ -1464,7 +1569,7 @@ mod tests {
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 62);
+        assert_eq!(registry.len(), 66);
     }
 }
 
