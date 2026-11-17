@@ -952,6 +952,59 @@ struct AvatarUsageRankingArgs {
     limit: i64,
 }
 
+/// Recently worn avatars for one account (`app__avatar_history_list`).
+#[derive(serde::Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+struct AvatarHistoryListArgs {
+    #[serde(default)]
+    user_id: String,
+    #[serde(default)]
+    limit: i64,
+}
+
+async fn app__avatar_history_list(
+    state: Arc<RuntimeHostState>,
+    args: AvatarHistoryListArgs,
+) -> Result<serde_json::Value, CommandError> {
+    let state2 = Arc::clone(&state);
+    let rows = blocking("avatar history list", move || {
+        dialog::avatar_history_list(&state2, args.user_id, args.limit)
+    })
+    .await?;
+    serde_json::to_value(rows).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+async fn app__avatar_tags_distinct(
+    state: Arc<RuntimeHostState>,
+    _args: serde_json::Value,
+) -> Result<serde_json::Value, CommandError> {
+    let state2 = Arc::clone(&state);
+    let rows = blocking("avatar tags distinct", move || {
+        dialog::avatar_tags_distinct(&state2)
+    })
+    .await?;
+    serde_json::to_value(rows).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+async fn app__my_avatars_get(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<vrcx_0_application::avatars::MyAvatarsInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let rows = dialog::my_avatars(&state, args.input)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(rows).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+async fn app__my_avatar_by_id_get(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<vrcx_0_application::avatars::MyAvatarByIdInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let row = dialog::my_avatar_by_id(&state, args.input)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(row).map_err(|error| CommandError::failed(error.to_string()))
+}
 async fn app__avatar_usage_ranking(
     state: Arc<RuntimeHostState>,
     args: AvatarUsageRankingArgs,
@@ -1409,6 +1462,26 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         "app__avatar_get",
         app__avatar_get,
     );
+    registry.register_typed::<AvatarHistoryListArgs, serde_json::Value, _, _>(
+        "app__avatar_history_list",
+        app__avatar_history_list,
+    );
+    registry.register_typed::<serde_json::Value, serde_json::Value, _, _>(
+        "app__avatar_tags_distinct",
+        app__avatar_tags_distinct,
+    );
+    registry.register_typed::<
+        InputArgs<vrcx_0_application::avatars::MyAvatarsInput>,
+        serde_json::Value,
+        _,
+        _,
+    >("app__my_avatars_get", app__my_avatars_get);
+    registry.register_typed::<
+        InputArgs<vrcx_0_application::avatars::MyAvatarByIdInput>,
+        serde_json::Value,
+        _,
+        _,
+    >("app__my_avatar_by_id_get", app__my_avatar_by_id_get);
     registry.register_typed::<AvatarUsageRankingArgs, serde_json::Value, _, _>(
         "app__avatar_usage_ranking",
         app__avatar_usage_ranking,
@@ -1601,7 +1674,7 @@ mod tests {
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 68);
+        assert_eq!(registry.len(), 72);
     }
 }
 

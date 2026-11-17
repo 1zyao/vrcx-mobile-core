@@ -73,3 +73,88 @@ pub async fn user_groups_overview_query(
     )
     .await
 }
+
+/// `app__avatar_history_list`: recently worn/seen avatars for one account.
+pub fn avatar_history_list(
+    state: &RuntimeHostState,
+    user_id: String,
+    limit: i64,
+) -> vrcx_0_persistence::Result<Vec<vrcx_0_contracts::AvatarCacheOutput>> {
+    vrcx_0_persistence::avatars::avatar_history_list(state.database().as_ref(), user_id, limit)
+        .map_err(Into::into)
+}
+
+/// `app__avatar_tags_distinct`: every tag string in use, for the tag filter.
+pub fn avatar_tags_distinct(
+    state: &RuntimeHostState,
+) -> vrcx_0_persistence::Result<Vec<String>> {
+    vrcx_0_persistence::avatars::avatar_tags_distinct(state.database().as_ref()).map_err(Into::into)
+}
+
+/// `app__my_avatars_get`: the signed-in account's own avatars.
+///
+/// Desktop builds this from `local_data()`; the pieces it needs are public: a persistence-backed store
+/// (`LocalAvatarApplicationAdapter`), a remote (`VrchatAvatarRemote` over web + diagnostics + sync) and
+/// the auth scope, plus the expected scope so a session switch mid-request is refused.
+pub async fn my_avatars(
+    state: &RuntimeHostState,
+    input: vrcx_0_application::avatars::MyAvatarsInput,
+) -> vrcx_0_application_core::Result<Vec<serde_json::Value>> {
+    let expected_scope = state.desktop_assembly().auth_scope().snapshot();
+    if !expected_scope.active || expected_scope.current_user_id.trim().is_empty() {
+        return Err(vrcx_0_application_core::Error::Custom(
+            "My avatars query requires an authenticated session.".into(),
+        ));
+    }
+    let assembly = state.desktop_assembly();
+    let store = vrcx_0_outbound_adapters::LocalAvatarApplicationAdapter::new(Arc::clone(
+        state.database(),
+    ));
+    let remote = vrcx_0_outbound_adapters::VrchatAvatarRemote::new(
+        Arc::clone(state.web_client()),
+        assembly.diagnostics().clone(),
+        assembly.sync().clone(),
+    );
+    vrcx_0_application::avatars::get_my_avatars(
+        &vrcx_0_application::avatars::MyAvatarsDeps::new(
+            &store,
+            &remote,
+            assembly.auth_scope(),
+            expected_scope,
+        ),
+        input,
+    )
+    .await
+}
+
+/// `app__my_avatar_by_id_get`: one of the signed-in account's avatars, by id.
+pub async fn my_avatar_by_id(
+    state: &RuntimeHostState,
+    input: vrcx_0_application::avatars::MyAvatarByIdInput,
+) -> vrcx_0_application_core::Result<Option<serde_json::Value>> {
+    let expected_scope = state.desktop_assembly().auth_scope().snapshot();
+    if !expected_scope.active || expected_scope.current_user_id.trim().is_empty() {
+        return Err(vrcx_0_application_core::Error::Custom(
+            "My avatars query requires an authenticated session.".into(),
+        ));
+    }
+    let assembly = state.desktop_assembly();
+    let store = vrcx_0_outbound_adapters::LocalAvatarApplicationAdapter::new(Arc::clone(
+        state.database(),
+    ));
+    let remote = vrcx_0_outbound_adapters::VrchatAvatarRemote::new(
+        Arc::clone(state.web_client()),
+        assembly.diagnostics().clone(),
+        assembly.sync().clone(),
+    );
+    vrcx_0_application::avatars::get_my_avatar_by_id(
+        &vrcx_0_application::avatars::MyAvatarsDeps::new(
+            &store,
+            &remote,
+            assembly.auth_scope(),
+            expected_scope,
+        ),
+        input,
+    )
+    .await
+}
