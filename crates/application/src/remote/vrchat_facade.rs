@@ -446,6 +446,22 @@ impl VrchatRemoteFacade {
         .await
     }
 
+
+    /// One print by id (`GET prints/{id}`).
+    pub async fn print_get(&self, print_id: String) -> Result<VrchatResponse> {
+        let request = vrcx_0_vrchat_protocol::media::print_get_input(
+            VRCHAT_API_DEFAULT_ENDPOINT.into(),
+            print_id,
+        )?;
+        self.execute(
+            "app__vrchat_print_get",
+            "Getting print.",
+            request,
+            VrchatScope::Vrchat,
+        )
+        .await
+    }
+
     /// Wears an avatar (`PUT avatars/{id}/select`).
     ///
     /// Cloud reaches this through its avatars service; that service is not on this host, so the
@@ -1431,4 +1447,5 @@ impl VrchatRemoteFacade {
         }
     }
 }
+
 

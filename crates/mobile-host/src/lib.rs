@@ -625,6 +625,56 @@ struct AvatarGetArgs {
     avatar_id: String,
 }
 
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct EconomyBalanceArgs {
+    #[serde(default)]
+    user_id: String,
+}
+
+async fn app__vrchat_economy_balance_get(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<EconomyBalanceArgs>,
+) -> Result<serde_json::Value, CommandError> {
+    let response = state
+        .vrchat_remote()
+        .economy_balance(args.input.user_id)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+async fn app__vrchat_inventory_get(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<vrcx_0_contracts::vrchat_requests::InventoryListParams>,
+) -> Result<serde_json::Value, CommandError> {
+    let response = state
+        .vrchat_remote()
+        .inventory_items(args.input)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PrintGetArgs {
+    #[serde(default)]
+    print_id: String,
+}
+
+async fn app__vrchat_print_get(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<PrintGetArgs>,
+) -> Result<serde_json::Value, CommandError> {
+    let response = state
+        .vrchat_remote()
+        .print_get(args.input.print_id)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
 async fn app__vrchat_avatar_select(
     state: Arc<RuntimeHostState>,
     args: InputArgs<AvatarGetArgs>,
@@ -963,6 +1013,20 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         "app__vrchat_search_worlds_get",
         app__vrchat_search_worlds_get,
     );
+    registry.register_typed::<InputArgs<EconomyBalanceArgs>, serde_json::Value, _, _>(
+        "app__vrchat_economy_balance_get",
+        app__vrchat_economy_balance_get,
+    );
+    registry.register_typed::<
+        InputArgs<vrcx_0_contracts::vrchat_requests::InventoryListParams>,
+        serde_json::Value,
+        _,
+        _,
+    >("app__vrchat_media_inventory_items_get", app__vrchat_inventory_get);
+    registry.register_typed::<InputArgs<PrintGetArgs>, serde_json::Value, _, _>(
+        "app__vrchat_print_get",
+        app__vrchat_print_get,
+    );
     registry.register_typed::<InputArgs<AvatarGetArgs>, serde_json::Value, _, _>(
         "app__vrchat_avatar_select",
         app__vrchat_avatar_select,
@@ -1151,7 +1215,7 @@ mod tests {
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 52);
+        assert_eq!(registry.len(), 55);
     }
 }
 
@@ -1291,6 +1355,9 @@ async fn app__favorite_list(
     .map_err(|error| CommandError::failed(error.to_string()))?;
     Ok(rows)
 }
+
+
+
 
 
 
