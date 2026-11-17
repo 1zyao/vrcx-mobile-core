@@ -16,4 +16,4 @@ serde_json = { workspace = true }
 vrcx-0-mobile-core = { path = "../mobile-core" }
 
 [target.'cfg(target_os = "android")'.dependencies]
-jni = "0.21"
+jni = "0.22"
