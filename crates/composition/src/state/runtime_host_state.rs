@@ -1072,5 +1072,38 @@ impl RuntimeHostState {
         );
         vrcx_0_application::social::mark_notifications_seen_batch(&actions, input).await
     }
+
+    /// The dependencies the group API functions take.
+    ///
+    /// Mirrors the desktop host's `api_deps()`: the same request adapter over this host's web
+    /// client, plus diagnostics/sync/scope/mutation gate from the desktop assembly.
+    fn group_api_deps(&self) -> vrcx_0_application::social::GroupApiDeps {
+        let assembly = self.desktop_assembly();
+        vrcx_0_application::social::GroupApiDeps::new(
+            Arc::new(vrcx_0_outbound_adapters::VrchatRequestAdapter::new(
+                Arc::clone(self.web_client()),
+            )),
+            assembly.diagnostics().clone(),
+            assembly.sync().clone(),
+            assembly.auth_scope().clone(),
+            Arc::clone(&self.runtime_context.remote_mutations),
+        )
+    }
+
+    /// A page of group posts (`GET groups/{id}/posts`).
+    pub async fn group_posts(
+        &self,
+        input: vrcx_0_application::social::VrchatGroupPagedInput,
+    ) -> vrcx_0_application_core::Result<vrcx_0_contracts::vrchat_api::VrchatResponse> {
+        vrcx_0_application::social::get_posts(self.group_api_deps(), input).await
+    }
+
+    /// The group instances a user is in (`GET users/{id}/instances/groups`).
+    pub async fn group_user_instances(
+        &self,
+        input: vrcx_0_application::social::VrchatGroupUserGroupsInput,
+    ) -> vrcx_0_application_core::Result<vrcx_0_contracts::vrchat_api::VrchatResponse> {
+        vrcx_0_application::social::get_user_instances(self.group_api_deps(), input).await
+    }
 }
 

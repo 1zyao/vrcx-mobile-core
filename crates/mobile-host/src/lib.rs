@@ -56,6 +56,28 @@ async fn app__vrchat_favorite_groups_get(
     serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
 }
 
+async fn app__vrchat_group_posts_get(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<vrcx_0_application::social::VrchatGroupPagedInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let response = state
+        .group_posts(args.input)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+async fn app__vrchat_group_user_instances_get(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<vrcx_0_application::social::VrchatGroupUserGroupsInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let response = state
+        .group_user_instances(args.input)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
 async fn app__vrchat_group_members_get(
     state: Arc<RuntimeHostState>,
     args: InputArgs<vrcx_0_application::social::VrchatGroupMembersInput>,
@@ -886,6 +908,21 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         app__world_get,
     );
     registry.register_typed::<
+        InputArgs<vrcx_0_application::social::VrchatGroupPagedInput>,
+        serde_json::Value,
+        _,
+        _,
+    >("app__vrchat_group_posts_get", app__vrchat_group_posts_get);
+    registry.register_typed::<
+        InputArgs<vrcx_0_application::social::VrchatGroupUserGroupsInput>,
+        serde_json::Value,
+        _,
+        _,
+    >(
+        "app__vrchat_group_user_instances_get",
+        app__vrchat_group_user_instances_get,
+    );
+    registry.register_typed::<
         InputArgs<vrcx_0_application::social::VrchatGroupMembersInput>,
         serde_json::Value,
         _,
@@ -1026,7 +1063,7 @@ mod tests {
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 45);
+        assert_eq!(registry.len(), 47);
     }
 }
 
@@ -1166,6 +1203,7 @@ async fn app__favorite_list(
     .map_err(|error| CommandError::failed(error.to_string()))?;
     Ok(rows)
 }
+
 
 
 
