@@ -193,6 +193,31 @@ impl VrchatRemoteFacade {
         .await
     }
 
+    /// A page of group members (`GET groups/{id}/members`).
+    pub async fn group_members(
+        &self,
+        group_id: String,
+        n: i32,
+        offset: i32,
+        sort: crate::social::GroupMemberSort,
+        role_id: String,
+    ) -> Result<VrchatResponse> {
+        let (group_id, request) = vrcx_0_vrchat_protocol::groups::members_get_input(
+            group_id,
+            n,
+            offset,
+            sort,
+            role_id,
+        )?;
+        self.execute(
+            "app__vrchat_group_members_get",
+            format!("Getting members of group {group_id}."),
+            request,
+            VrchatScope::Vrchat,
+        )
+        .await
+    }
+
     /// Joins a group (`POST groups/{id}/join`).
     ///
     /// Cloud serves this through its groups service; the service is not on this host, so the raw
@@ -1350,3 +1375,4 @@ impl VrchatRemoteFacade {
         }
     }
 }
+

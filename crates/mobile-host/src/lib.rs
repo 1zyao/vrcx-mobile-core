@@ -56,6 +56,19 @@ async fn app__vrchat_favorite_groups_get(
     serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
 }
 
+async fn app__vrchat_group_members_get(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<vrcx_0_application::social::VrchatGroupMembersInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let input = args.input;
+    let response = state
+        .vrchat_remote()
+        .group_members(input.group_id, input.n, input.offset, input.sort, input.role_id)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
 async fn app__vrchat_group_join(
     state: Arc<RuntimeHostState>,
     args: InputArgs<vrcx_0_application::social::VrchatGroupIdInput>,
@@ -873,6 +886,12 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         app__world_get,
     );
     registry.register_typed::<
+        InputArgs<vrcx_0_application::social::VrchatGroupMembersInput>,
+        serde_json::Value,
+        _,
+        _,
+    >("app__vrchat_group_members_get", app__vrchat_group_members_get);
+    registry.register_typed::<
         InputArgs<vrcx_0_application::social::VrchatGroupIdInput>,
         serde_json::Value,
         _,
@@ -1007,7 +1026,7 @@ mod tests {
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 44);
+        assert_eq!(registry.len(), 45);
     }
 }
 
@@ -1147,6 +1166,7 @@ async fn app__favorite_list(
     .map_err(|error| CommandError::failed(error.to_string()))?;
     Ok(rows)
 }
+
 
 
 
