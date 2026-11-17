@@ -870,22 +870,32 @@ export function SettingsSyncTab() {
                                                         {collectorRank(device)}
                                                     </span>
                                                 ) : null}
-                                                {deviceHealth(device) <= 0 ? (
-                                                    <Badge
-                                                        variant="destructive"
-                                                        className="h-4 px-1.5 text-[10px]"
-                                                        title={t(
-                                                            'view.settings.sync.status.health_unhealthy'
-                                                        )}
-                                                    >
-                                                        {t(
-                                                            'view.settings.sync.status.health_label'
-                                                        )}{' '}
+                                                <Badge
+                                                    variant={
+                                                        deviceHealth(device) <=
                                                         0
-                                                    </Badge>
-                                                ) : !writerDeviceIds.has(
-                                                      device.deviceId
-                                                  ) ? (
+                                                            ? 'destructive'
+                                                            : 'secondary'
+                                                    }
+                                                    className="h-4 px-1.5 text-[10px]"
+                                                    title={
+                                                        deviceHealth(device) <= 0
+                                                            ? t(
+                                                                  'view.settings.sync.status.health_unhealthy'
+                                                              )
+                                                            : t(
+                                                                  'view.settings.sync.status.health_healthy'
+                                                              )
+                                                    }
+                                                >
+                                                    {t(
+                                                        'view.settings.sync.status.health_label'
+                                                    )}{' '}
+                                                    {deviceHealth(device)}
+                                                </Badge>
+                                                {!writerDeviceIds.has(
+                                                    device.deviceId
+                                                ) ? (
                                                     <span className="text-muted-foreground shrink-0 text-[10px]">
                                                         {t(
                                                             'view.settings.sync.status.health_yielded'
