@@ -1065,3 +1065,57 @@ usred329568c23b4ee1aec9e902f29dff19_feed_gps
 ```
 
 直接写 `feed_gps` 会报 `no such table`；库里的 owner 前缀是用户名 sub 去横线的形式。
+
+## 第 53-57 轮：只读域收尾，以及一个解释了三轮补丁的根因
+
+### 命令面 50 → 57
+
+```
+只读    inventory_items_get（云已有，未注册）· media_files_get（云已有，未注册）
+        media_prints_get / media_print_get（云已有，未注册）· economy_balance_get（自命名）
+写      avatar_select / avatar_select_fallback（自命名，可逆）
+读模型  game_log_sessions_query
+```
+
+这轮有个反复出现的模式：**门面里早就有 cloud 的规范实现，只是没在手机端注册**。
+`media_prints_get`、`media_print_get`、`media_inventory_items_get` 都是这样。我两次差点又造
+新名字（`app__vrchat_prints_get`、`app__vrchat_inventory_get`），都是 grep 到已有实现才纠正。
+**新增命令前先查门面和注册表。**
+
+### 最重要的发现：两个 JSON 解码器不一致
+
+翻完 `/files` 后，图库 Gallery 从 **4/64 变成 0/64**，界面上没有任何错误，只有日志里一行：
+
+```
+Field 'animationStyle' is required for FileData, but it was missing
+```
+
+原因：VRChat 对相册图片不返回 `animationStyle`，而
+
+```
+应用网络层 Json：coerceInputValues = true, explicitNulls = false
+CoreJson（命令总线）：只有 ignoreUnknownKeys + isLenient
+```
+
+同一份 payload，走 Ktor 能解，走命令总线就抛。
+
+**这解释了第 26、35 轮为什么给 `WorldData` / `UnityPackage` 逐字段加默认值** —— 那不是设计，
+那是按 DTO 打补丁。现在 `CoreJson` 配置对齐，同类问题不会再一个个冒出来。
+
+教训：一个 DTO 在一条路径上能解、另一条路径上不能，说明问题在解码器，不在 DTO。
+
+### 库存页：一个"拒绝"差点拒绝掉正常路径
+
+`archived = false`（界面默认「归档: 当前」）我第一版直接拒绝，页面报「无法加载库存」。
+但**省略该参数在网络语义上就等于"不含归档"**，所以 `false` 应当省略，只有 `true` 才拒绝。
+截图抓到了这个错误；只看编译不会。
+
+### 写操作的选择标准
+
+这轮只加了 `avatar_select`，理由写在提交里：**可逆（切回即可），且只影响自己**。
+解除好友、封禁、删除世界/模型、群组管理这些没有做 —— 它们真正的风险是用用户账号对别人做事，
+而我能验证的只有"无会话时报错"这一层。
+
+### 第 58 轮：终态回归 sweep
+
+见下方"终态"一节。
