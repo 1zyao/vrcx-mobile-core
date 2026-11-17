@@ -10,6 +10,7 @@
 
 use std::sync::Arc;
 
+mod dialog;
 mod instance_history;
 
 use std::collections::HashMap;
@@ -1183,6 +1184,25 @@ async fn app__vrchat_search_groups_get(
 ///
 /// The body is `state.social().favorites_baseline(input)`; the orchestration lives in
 /// `vrcx-0-social-runtime`, which is the same code path the desktop host uses.
+async fn app__user_dialog_tab_counts_get(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<vrcx_0_application::social::UserDialogTabCountsInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let output = dialog::user_dialog_tab_counts_query(&state, args.input)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(output).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+async fn app__user_groups_overview_get(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<vrcx_0_application::social::UserGroupsOverviewInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let output = dialog::user_groups_overview_query(&state, args.input)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(output).map_err(|error| CommandError::failed(error.to_string()))
+}
 async fn app__social_favorites_baseline_get(
     state: Arc<RuntimeHostState>,
     args: InputArgs<vrcx_0_application_realtime::SocialFavoritesBaselineInput>,
@@ -1284,6 +1304,18 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         "app__vrchat_instance_get",
         app__vrchat_instance_get,
     );
+    registry.register_typed::<
+        InputArgs<vrcx_0_application::social::UserDialogTabCountsInput>,
+        serde_json::Value,
+        _,
+        _,
+    >("app__user_dialog_tab_counts_get", app__user_dialog_tab_counts_get);
+    registry.register_typed::<
+        InputArgs<vrcx_0_application::social::UserGroupsOverviewInput>,
+        serde_json::Value,
+        _,
+        _,
+    >("app__user_groups_overview_get", app__user_groups_overview_get);
     registry.register_typed::<QueryArgs<NotificationListQueryInput>, Vec<NotificationListItemOutput>, _, _>(
         "app__notification_list_query",
         app__notification_list_query,
@@ -1569,7 +1601,7 @@ mod tests {
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 66);
+        assert_eq!(registry.len(), 68);
     }
 }
 
