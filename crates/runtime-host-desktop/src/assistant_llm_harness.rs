@@ -569,6 +569,7 @@ impl Rig {
                 source: AppDataDirSource::Cli,
             },
             app_version: "0.0.0-harness".into(),
+            device_hostname: "harness-host".into(),
             profile: RuntimeHostProfile::HeadlessData,
             database_maintenance_cache_dir: None,
             task_executor: None,

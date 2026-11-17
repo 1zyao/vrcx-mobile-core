@@ -36,6 +36,7 @@ async fn a_window_opened_later_still_gets_how_long_friends_have_been_in_their_in
     let app_data = dir.path.join("app-data");
     std::fs::create_dir_all(&app_data).unwrap();
     let state = RuntimeHostState::new(RuntimeHostOptions {
+        device_hostname: String::new(),
         realtime_origin: "http://localhost:9000".into(),
         launched_from_autostart: false,
         app_data_dir: AppDataDirResolution {
