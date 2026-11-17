@@ -56,6 +56,17 @@ async fn app__vrchat_favorite_groups_get(
     serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
 }
 
+async fn app__vrchat_group_gallery_get(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<vrcx_0_application::social::VrchatGroupGalleryInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let response = state
+        .group_gallery(args.input)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
 async fn app__vrchat_group_posts_get(
     state: Arc<RuntimeHostState>,
     args: InputArgs<vrcx_0_application::social::VrchatGroupPagedInput>,
@@ -908,6 +919,12 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         app__world_get,
     );
     registry.register_typed::<
+        InputArgs<vrcx_0_application::social::VrchatGroupGalleryInput>,
+        serde_json::Value,
+        _,
+        _,
+    >("app__vrchat_group_gallery_get", app__vrchat_group_gallery_get);
+    registry.register_typed::<
         InputArgs<vrcx_0_application::social::VrchatGroupPagedInput>,
         serde_json::Value,
         _,
@@ -1063,7 +1080,7 @@ mod tests {
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 47);
+        assert_eq!(registry.len(), 48);
     }
 }
 
@@ -1203,6 +1220,7 @@ async fn app__favorite_list(
     .map_err(|error| CommandError::failed(error.to_string()))?;
     Ok(rows)
 }
+
 
 
 

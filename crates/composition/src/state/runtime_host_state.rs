@@ -1098,6 +1098,14 @@ impl RuntimeHostState {
         vrcx_0_application::social::get_posts(self.group_api_deps(), input).await
     }
 
+    /// The images of one group gallery (`GET groups/{id}/galleries/{galleryId}`).
+    pub async fn group_gallery(
+        &self,
+        input: vrcx_0_application::social::VrchatGroupGalleryInput,
+    ) -> vrcx_0_application_core::Result<vrcx_0_contracts::vrchat_api::VrchatResponse> {
+        vrcx_0_application::social::get_gallery(self.group_api_deps(), input).await
+    }
+
     /// The group instances a user is in (`GET users/{id}/instances/groups`).
     pub async fn group_user_instances(
         &self,
