@@ -9994,6 +9994,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+ "uuid",
  "vrcx-0-application-core",
  "vrcx-0-command-server",
  "vrcx-0-composition",

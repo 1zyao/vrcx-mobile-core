@@ -23,7 +23,11 @@ use vrcx_0_composition::{
 };
 
 /// Builds the runtime host rooted at `app_data_dir`.
-pub fn build_host(app_data_dir: &Path) -> Result<RuntimeHostState, String> {
+///
+/// `device_name` is what this installation reports to remote sync presence (`_sync_devices`). The
+/// phone used to pass an empty string - which the sync host treats as "hide it" - so the device list
+/// showed a bare id (or, worse, another machine's name on the row the two of them shared).
+pub fn build_host(app_data_dir: &Path, device_name: &str) -> Result<RuntimeHostState, String> {
     let resolution = AppDataDirResolution {
         current_dir: app_data_dir.to_path_buf(),
         default_dir: app_data_dir.to_path_buf(),
@@ -37,7 +41,7 @@ pub fn build_host(app_data_dir: &Path) -> Result<RuntimeHostState, String> {
         launched_from_autostart: false,
         app_data_dir: resolution,
         app_version: env!("CARGO_PKG_VERSION").to_string(),
-        device_hostname: String::new(),
+        device_hostname: device_name.trim().to_string(),
         profile: RuntimeHostProfile::HeadlessData,
         database_maintenance_cache_dir: Some(app_data_dir.join("cache")),
         task_executor: None,
@@ -73,7 +77,7 @@ mod tests {
     #[test]
     fn builds_a_headless_host_with_a_local_database() {
         let dir = scratch("host");
-        let host = build_host(&dir).expect("build host");
+        let host = build_host(&dir, "test-device").expect("build host");
 
         // The builder resolves paths and opens the database during finish().
         assert!(dir.exists(), "app data dir kept");
