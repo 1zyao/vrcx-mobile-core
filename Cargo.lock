@@ -9727,6 +9727,7 @@ dependencies = [
  "futures-util",
  "serde",
  "serde_json",
+ "specta",
  "tokio",
  "tracing",
 ]
@@ -10008,6 +10009,7 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+ "specta",
  "tokio",
  "vrcx-0-application",
  "vrcx-0-application-core",
