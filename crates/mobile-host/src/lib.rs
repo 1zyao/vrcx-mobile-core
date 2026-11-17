@@ -663,13 +663,34 @@ struct PrintGetArgs {
     print_id: String,
 }
 
-async fn app__vrchat_print_get(
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PrintsArgs {
+    #[serde(default)]
+    user_id: String,
+    #[serde(default)]
+    n: i32,
+}
+
+async fn app__vrchat_media_prints_get(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<PrintsArgs>,
+) -> Result<serde_json::Value, CommandError> {
+    let response = state
+        .vrchat_remote()
+        .prints(args.input.user_id, args.input.n)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+async fn app__vrchat_media_print_get_handler(
     state: Arc<RuntimeHostState>,
     args: InputArgs<PrintGetArgs>,
 ) -> Result<serde_json::Value, CommandError> {
     let response = state
         .vrchat_remote()
-        .print_get(args.input.print_id)
+        .print(args.input.print_id)
         .await
         .map_err(|error| CommandError::failed(error.to_string()))?;
     serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
@@ -1023,9 +1044,13 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         _,
         _,
     >("app__vrchat_media_inventory_items_get", app__vrchat_inventory_get);
+    registry.register_typed::<InputArgs<PrintsArgs>, serde_json::Value, _, _>(
+        "app__vrchat_media_prints_get",
+        app__vrchat_media_prints_get,
+    );
     registry.register_typed::<InputArgs<PrintGetArgs>, serde_json::Value, _, _>(
-        "app__vrchat_print_get",
-        app__vrchat_print_get,
+        "app__vrchat_media_print_get",
+        app__vrchat_media_print_get_handler,
     );
     registry.register_typed::<InputArgs<AvatarGetArgs>, serde_json::Value, _, _>(
         "app__vrchat_avatar_select",
@@ -1215,7 +1240,7 @@ mod tests {
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 55);
+        assert_eq!(registry.len(), 56);
     }
 }
 
@@ -1355,6 +1380,8 @@ async fn app__favorite_list(
     .map_err(|error| CommandError::failed(error.to_string()))?;
     Ok(rows)
 }
+
+
 
 
 

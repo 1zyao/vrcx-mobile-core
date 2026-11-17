@@ -447,20 +447,6 @@ impl VrchatRemoteFacade {
     }
 
 
-    /// One print by id (`GET prints/{id}`).
-    pub async fn print_get(&self, print_id: String) -> Result<VrchatResponse> {
-        let request = vrcx_0_vrchat_protocol::media::print_get_input(
-            VRCHAT_API_DEFAULT_ENDPOINT.into(),
-            print_id,
-        )?;
-        self.execute(
-            "app__vrchat_print_get",
-            "Getting print.",
-            request,
-            VrchatScope::Vrchat,
-        )
-        .await
-    }
 
     /// Wears an avatar (`PUT avatars/{id}/select`).
     ///
@@ -1447,5 +1433,7 @@ impl VrchatRemoteFacade {
         }
     }
 }
+
+
 
 
