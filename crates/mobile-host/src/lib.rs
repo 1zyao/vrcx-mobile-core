@@ -266,7 +266,27 @@ async fn app__notification_list_query(
 #[derive(serde::Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 struct WorldGetArgs {
-    input: vrcx_0_contracts::WorldGetInput,
+    input: WorldGetInput,
+}
+
+/// World-get input, declared here rather than in `contracts`.
+///
+/// Upstream has no such type - it hands the three fields to the world cache directly - so keeping it
+/// in the shared `contracts` crate meant carrying a fork-only file inside a crate that also exists
+/// upstream, and that file was the one thing blocking the merge. Same reason the phone's other
+/// command inputs live in this crate.
+#[derive(serde::Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+struct WorldGetInput {
+    world_id: String,
+    #[serde(default)]
+    force: bool,
+    #[serde(default = "default_true")]
+    full: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 /// World details, cache-first, from the same read model the desktop/cloud command
@@ -277,7 +297,7 @@ async fn app__world_get(
     args: WorldGetArgs,
 ) -> Result<vrcx_0_contracts::VrchatResponse, CommandError> {
     state
-        .world_get(args.input)
+        .world_get(&args.input.world_id, args.input.force, args.input.full)
         .await
         .map_err(|error| CommandError::failed(error.to_string()))
 }

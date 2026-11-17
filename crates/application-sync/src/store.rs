@@ -123,6 +123,9 @@ pub trait RemoteSyncStore: Send + Sync {
 
     async fn devices_upsert(&self, record: &SyncDeviceRecord) -> SyncStoreResult<()>;
     async fn devices_list(&self) -> SyncStoreResult<Vec<SyncDeviceRecord>>;
+    /// Drop one device's presence row (a machine that is gone for good).
+    /// Returns false when there was no such row.
+    async fn devices_delete(&self, device_id: &str) -> SyncStoreResult<bool>;
 
     /// Drop ops older than the retention window; returns rows removed.
     async fn ops_gc(&self, retain_days: i64) -> SyncStoreResult<u64>;

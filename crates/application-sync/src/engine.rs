@@ -205,7 +205,11 @@ impl RemoteSyncEngine {
     }
 
     pub fn bootstrap_progress(&self) -> SyncBootstrapProgress {
-        self.state.lock().unwrap().progress.clone()
+        self.state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .progress
+            .clone()
     }
 
     pub fn configured_interval(&self) -> u64 {
@@ -217,15 +221,24 @@ impl RemoteSyncEngine {
     }
 
     fn set_phase(&self, phase: &str) {
-        self.state.lock().unwrap().phase = phase.to_string();
+        self.state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .phase = phase.to_string();
     }
 
     fn set_error(&self, message: Option<String>) {
-        self.state.lock().unwrap().last_error = message;
+        self.state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .last_error = message;
     }
 
     fn set_progress(&self, update: impl FnOnce(&mut SyncBootstrapProgress)) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         update(&mut state.progress);
     }
 
@@ -305,7 +318,12 @@ impl RemoteSyncEngine {
             pulled: counts.pulled,
             error: None,
         });
-        let mut state = self.state.lock().unwrap();
+        // A clean cycle clears the failure streak in the health tracker.
+        vrcx_0_contracts::collector_health::record_sync_cycle(true);
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         state.stats = CycleStats {
             pushed: counts.pushed,
             pulled: counts.pulled,
@@ -324,6 +342,7 @@ impl RemoteSyncEngine {
             pulled: 0,
             error: Some(message.to_string()),
         });
+        vrcx_0_contracts::collector_health::record_sync_cycle(false);
     }
 
     fn append_cycle_history(&self, record: &SyncCycleRecord) {
@@ -335,7 +354,11 @@ impl RemoteSyncEngine {
     }
 
     fn stats_snapshot(&self) -> CycleStats {
-        self.state.lock().unwrap().stats.clone()
+        self.state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .stats
+            .clone()
     }
 
     /// Normalized collector role for this device.
@@ -354,9 +377,7 @@ impl RemoteSyncEngine {
         let raw = vrcx_0_persistence::config::get_string(&self.db, CONFIG_COLLECTOR_ROLE, "")
             .unwrap_or_default();
         match raw.trim().to_ascii_lowercase().as_str() {
-            "forced" | "true" | "1" | "yes" => {
-                vrcx_0_contracts::DEVICE_ROLE_FORCED.to_string()
-            }
+            "forced" | "true" | "1" | "yes" => vrcx_0_contracts::DEVICE_ROLE_FORCED.to_string(),
             "off" | "false" | "0" | "no" => "off".to_string(),
             _ => vrcx_0_contracts::DEVICE_ROLE_AUTO.to_string(),
         }
@@ -365,6 +386,7 @@ impl RemoteSyncEngine {
     async fn cycle_inner(self: &Arc<Self>) -> EngineResult<CycleCounts> {
         self.reconcile_remote_epoch().await?;
 
+        let health = vrcx_0_contracts::collector_health::snapshot();
         // Register presence so other devices can list us, and advertise the
         // collector role the election reads back. `off` means "do not take
         // part": staying out of the registry is what keeps a machine from
@@ -379,6 +401,8 @@ impl RemoteSyncEngine {
                     device_name: self.device_name.clone(),
                     role: collector_role,
                     priority: self.collector_priority(),
+                    health: health.score as i32,
+                    health_reason: health.reason.to_string(),
                     ..SyncDeviceRecord::default()
                 })
                 .await;
@@ -792,7 +816,10 @@ impl RemoteSyncEngine {
 
     /// Phase and last error without holding the lock across an await.
     fn phase_snapshot(&self) -> (String, Option<String>) {
-        let state = self.state.lock().unwrap();
+        let state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         (state.phase.clone(), state.last_error.clone())
     }
 
@@ -802,14 +829,35 @@ impl RemoteSyncEngine {
     async fn ensure_remote_schema_if_changed(self: &Arc<Self>) -> EngineResult<()> {
         let schema = remote_schema_snapshot(&self.db)?;
         let hash = schema_hash(&schema);
-        if *self.ensured_schema_hash.lock().unwrap() == Some(hash) {
+        if *self
+            .ensured_schema_hash
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            == Some(hash)
+        {
             return Ok(());
         }
         self.store
             .ensure_schema(&schema, SYNC_PROTOCOL_SCHEMA_VERSION)
             .await?;
-        *self.ensured_schema_hash.lock().unwrap() = Some(hash);
+        *self
+            .ensured_schema_hash
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(hash);
         Ok(())
+    }
+
+    /// Remove a device's presence row. Refuses this device's own id: it would be
+    /// re-registered by the next cycle and only confuses the operator.
+    pub async fn forget_device(self: &Arc<Self>, device_id: &str) -> EngineResult<bool> {
+        let device_id = device_id.trim();
+        if device_id.is_empty() || device_id == self.handle.device_id() {
+            return Ok(false);
+        }
+        self.store
+            .devices_delete(device_id)
+            .await
+            .map_err(SyncEngineError::from)
     }
 
     pub async fn status(self: &Arc<Self>) -> SyncStatusSnapshot {
@@ -885,6 +933,22 @@ impl RemoteSyncEngine {
             last_error,
             remote_schema_version,
             remote_devices,
+            collector_health: vrcx_0_contracts::collector_health::snapshot().score as i64,
+            collector_reason: sync_meta_get(&self.db, "sync.collectorReason")
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| "healthy".to_string()),
+            collector_blockers: sync_meta_get(&self.db, "sync.collectorBlockers")
+                .ok()
+                .flatten()
+                .map(|raw| {
+                    raw.split(',')
+                        .map(str::trim)
+                        .filter(|id| !id.is_empty())
+                        .map(str::to_string)
+                        .collect()
+                })
+                .unwrap_or_default(),
         }
     }
 }

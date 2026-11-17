@@ -978,7 +978,9 @@ impl RuntimeHostState {
     /// UI parses one shape whichever host answered.
     pub async fn world_get(
         &self,
-        input: vrcx_0_contracts::WorldGetInput,
+        world_id: &str,
+        force: bool,
+        full: bool,
     ) -> vrcx_0_application_core::Result<vrcx_0_contracts::vrchat_api::VrchatResponse> {
         let auth_scope = self.runtime_context.auth_scope.snapshot();
         let endpoint = if auth_scope.endpoint.is_empty() {
@@ -988,7 +990,7 @@ impl RuntimeHostState {
         };
         self.runtime_context
             .world_cache
-            .get(endpoint, &input.world_id, input.force, input.full)
+            .get(endpoint, world_id, force, full)
             .await
     }
 

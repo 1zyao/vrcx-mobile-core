@@ -10,6 +10,7 @@ import {
     LaptopIcon,
     RefreshCwIcon,
     ShieldCheckIcon,
+    Trash2Icon,
     XCircleIcon
 } from 'lucide-react';
 import {
@@ -35,6 +36,7 @@ import {
     fetchSyncBootstrapProgress,
     fetchSyncConnection,
     fetchSyncStatus,
+    forgetSyncDevice,
     testSyncConnection,
     triggerSyncNow
 } from '@/repositories/syncRepository';
@@ -162,7 +164,9 @@ export function SettingsSyncTab() {
                 setTlsVerify(fields.tlsVerify);
                 setAllowPlaintext(fields.allowPlaintext);
                 setHasPassword(fields.hasPassword);
-                setCollectorPriority((fields.collectorPriority ?? 0).toString());
+                setCollectorPriority(
+                    (fields.collectorPriority ?? 0).toString()
+                );
                 if ((fields.intervalSeconds ?? 0) > 0) {
                     setIntervalSec(String(fields.intervalSeconds));
                 }
@@ -237,6 +241,20 @@ export function SettingsSyncTab() {
         }
     };
 
+    // Forget a device that is gone for good. Only offered for offline rows; the
+    // engine refuses this device's own id anyway.
+    const handleForgetDevice = async (deviceId: string) => {
+        try {
+            const snapshot = await forgetSyncDevice(deviceId);
+            setStatus(snapshot);
+        } catch (error) {
+            toast.add({
+                type: 'error',
+                title: String(error)
+            });
+        }
+    };
+
     const handleSave = async (nextEnabled: boolean) => {
         setSaving(true);
         try {
@@ -252,8 +270,7 @@ export function SettingsSyncTab() {
                     allowPlaintext
                 },
                 intervalSec: Number.parseInt(intervalSec, 10) || undefined,
-                collectorPriority:
-                    Number.parseInt(collectorPriority, 10) || 0
+                collectorPriority: Number.parseInt(collectorPriority, 10) || 0
             });
             setStatus(snapshot);
             setEnabled(snapshot.enabled);
@@ -306,11 +323,62 @@ export function SettingsSyncTab() {
             ? 1000
             : (device.priority ?? 0);
 
+    // Health score each device advertised, or `null` when it never reported one.
+    //
+    // Only a build with the health tracker fills `healthReason`, so that field is
+    // the reliable "did it measure anything" signal. Showing 100 for a device
+    // that never measured itself would claim something we do not know; unknown is
+    // treated as healthy for the ranking (fail-open, same as the Rust election).
+    const deviceHealth = (device: {
+        health?: number;
+        healthReason?: string;
+    }): number | null =>
+        device.healthReason && device.healthReason.trim()
+            ? (device.health ?? 0)
+            : null;
+
+    const deviceHealthy = (device: {
+        health?: number;
+        healthReason?: string;
+    }) => {
+        const health = deviceHealth(device);
+        return health === null || health > 0;
+    };
+
+    // Reasons come from the backend as stable identifiers; unknown values fall
+    // back to "healthy" so a newer host cannot break the label.
+    const healthReasonLabel = (reason?: string) => {
+        const known = [
+            'healthy',
+            'websocketUnstable',
+            'authExpired',
+            'syncFailing',
+            'recovering',
+            'disabled',
+            'yielded'
+        ];
+        const key = (reason ?? '').trim();
+        const safe = known.includes(key) ? key : 'healthy';
+        return t(`view.settings.sync.status.health_${safe}`);
+    };
+
     const canTest = host.trim().length > 0 && database.trim().length > 0;
     // Offline devices linger in the presence table until they age out of the
     // database; hiding them keeps the list to peers that can actually sync.
     const onlineDevices = status
         ? status.remoteDevices.filter((device) => device.online)
+        : [];
+
+    // The list shows every known device, online first: a machine that is simply
+    // switched off still explains why it is not the writer. Stale rows linger in
+    // the presence table, so ordering keeps them at the bottom.
+    const allDevices = status
+        ? [...status.remoteDevices].sort(
+              (a, b) =>
+                  Number(b.online ?? false) - Number(a.online ?? false) ||
+                  collectorRank(b) - collectorRank(a) ||
+                  a.deviceId.localeCompare(b.deviceId)
+          )
         : [];
 
     // Who records live feed right now: the online device with the highest
@@ -320,8 +388,14 @@ export function SettingsSyncTab() {
     // as priority 1000 there, so it does here too.
     const writerDeviceIds = new Set<string>(
         (() => {
-            if (onlineDevices.length === 0) return [];
-            const ranked = [...onlineDevices].sort(
+            // Mirror collector_election::may_collect: a device that reported
+            // itself unhealthy has yielded, so it must never be shown as the
+            // writer even when its priority is the highest.
+            const eligible = onlineDevices.filter((device) =>
+                deviceHealthy(device)
+            );
+            if (eligible.length === 0) return [];
+            const ranked = [...eligible].sort(
                 (a, b) =>
                     collectorRank(b) - collectorRank(a) ||
                     a.deviceId.localeCompare(b.deviceId)
@@ -488,8 +562,10 @@ export function SettingsSyncTab() {
                                 }
                                 onBlur={() =>
                                     setCollectorPriority((current) => {
-                                        const parsed =
-                                            Number.parseInt(current, 10);
+                                        const parsed = Number.parseInt(
+                                            current,
+                                            10
+                                        );
                                         if (!Number.isFinite(parsed)) {
                                             return '0';
                                         }
@@ -777,14 +853,28 @@ export function SettingsSyncTab() {
                             <BootstrapProgressView progress={bootstrap} />
                         ) : null}
 
-                        {onlineDevices.length > 0 ? (
+                        {allDevices.length > 0 ? (
                             <div>
                                 <p className="mb-2 flex items-center gap-1.5 text-xs font-medium">
                                     <LaptopIcon className="size-3.5" />
                                     {t('view.settings.sync.status.devices')}
                                 </p>
+                                <p className="text-muted-foreground mb-2 text-[11px]">
+                                    {writerDeviceIds.has(status.deviceId)
+                                        ? t(
+                                              'view.settings.sync.status.self_collecting'
+                                          )
+                                        : t(
+                                              'view.settings.sync.status.self_not_collecting',
+                                              {
+                                                  reason: healthReasonLabel(
+                                                      status.collectorReason
+                                                  )
+                                              }
+                                          )}
+                                </p>
                                 <ul className="flex flex-col gap-1.5">
-                                    {onlineDevices.map((device) => {
+                                    {allDevices.map((device) => {
                                         const isSelf =
                                             device.deviceId === status.deviceId;
                                         return (
@@ -835,6 +925,58 @@ export function SettingsSyncTab() {
                                                         {collectorRank(device)}
                                                     </span>
                                                 ) : null}
+                                                <Badge
+                                                    variant={
+                                                        deviceHealth(device) !==
+                                                            null &&
+                                                        deviceHealth(device)! <=
+                                                            0
+                                                            ? 'destructive'
+                                                            : 'secondary'
+                                                    }
+                                                    className="h-4 px-1.5 text-[10px]"
+                                                    title={
+                                                        deviceHealth(device) ===
+                                                        null
+                                                            ? t(
+                                                                  'view.settings.sync.status.health_unknown'
+                                                              )
+                                                            : deviceHealth(
+                                                                    device
+                                                                )! <= 0
+                                                              ? t(
+                                                                    'view.settings.sync.status.health_unhealthy'
+                                                                )
+                                                              : t(
+                                                                    'view.settings.sync.status.health_healthy'
+                                                                )
+                                                    }
+                                                >
+                                                    {t(
+                                                        'view.settings.sync.status.health_label'
+                                                    )}{' '}
+                                                    {deviceHealth(device) ===
+                                                    null
+                                                        ? '—'
+                                                        : deviceHealth(device)}
+                                                </Badge>
+                                                {!device.online ? null : deviceHealth(
+                                                      device
+                                                  ) === 0 ? (
+                                                    <span className="text-destructive shrink-0 text-[10px]">
+                                                        {healthReasonLabel(
+                                                            device.healthReason
+                                                        )}
+                                                    </span>
+                                                ) : !writerDeviceIds.has(
+                                                      device.deviceId
+                                                  ) ? (
+                                                    <span className="text-muted-foreground shrink-0 text-[10px]">
+                                                        {t(
+                                                            'view.settings.sync.status.health_yielded'
+                                                        )}
+                                                    </span>
+                                                ) : null}
                                                 <span className="ml-auto flex shrink-0 items-center gap-3">
                                                     <span className="text-muted-foreground">
                                                         {device.appVersion ||
@@ -843,14 +985,43 @@ export function SettingsSyncTab() {
                                                     <DeviceSeenLabel
                                                         device={device}
                                                     />
-                                                    <Badge
-                                                        variant="secondary"
-                                                        className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
-                                                    >
-                                                        {t(
-                                                            'view.settings.sync.status.device_online'
-                                                        )}
-                                                    </Badge>
+                                                    {!device.online &&
+                                                    !isSelf ? (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="text-muted-foreground hover:text-destructive size-6"
+                                                            title={t(
+                                                                'view.settings.sync.status.forget_device'
+                                                            )}
+                                                            onClick={() =>
+                                                                handleForgetDevice(
+                                                                    device.deviceId
+                                                                )
+                                                            }
+                                                        >
+                                                            <Trash2Icon className="size-3.5" />
+                                                        </Button>
+                                                    ) : null}
+                                                    {device.online ? (
+                                                        <Badge
+                                                            variant="secondary"
+                                                            className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                                                        >
+                                                            {t(
+                                                                'view.settings.sync.status.device_online'
+                                                            )}
+                                                        </Badge>
+                                                    ) : (
+                                                        <Badge
+                                                            variant="secondary"
+                                                            className="text-muted-foreground/70 bg-muted/40"
+                                                        >
+                                                            {t(
+                                                                'view.settings.sync.status.device_offline'
+                                                            )}
+                                                        </Badge>
+                                                    )}
                                                 </span>
                                             </li>
                                         );
@@ -865,8 +1036,6 @@ export function SettingsSyncTab() {
                     </p>
                 )}
             </SettingsCard>
-
-
         </SettingsTabContent>
     );
 }
