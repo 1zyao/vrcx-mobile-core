@@ -226,6 +226,12 @@ pub const SYNC_EXCLUDED_CONFIG_KEYS: &[&str] = &[
     "config:vrcx_remotesync.password",
     "config:vrcx_remotesync.collector",
     "config:remotesync.collector",
+    // Collector priority is per-device as well: the 24/7 server sits at 0 while
+    // desktops use 10/20. Syncing it lets whichever device wrote last win, so a
+    // desktop happily adopts the server's 0 and stops collecting the feed that
+    // is on screen. Excluded like the role above (both key spellings).
+    "config:vrcx_remotesync.collectorpriority",
+    "config:remotesync.collectorpriority",
     // Schema/machine-local bookkeeping.
     "config:vrcx_0_databaseversion",
     "config:databaseversion",

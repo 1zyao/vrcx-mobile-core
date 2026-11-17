@@ -602,6 +602,55 @@ pub fn install_capture(db: &DatabaseService) -> Result<SyncCaptureHandle, Error>
     Ok(handle)
 }
 
+/// The `configs` trigger embeds the credential/role exclusion list in its `WHEN`
+/// clause, and table columns say nothing about that list: column drift therefore
+/// never catches an out-of-date trigger. Rebuild it whenever the live SQL no
+/// longer matches what this build would generate.
+fn refresh_configs_trigger(db: &DatabaseService, handle: &SyncCaptureHandle) -> Result<(), Error> {
+    let plan = {
+        let plans = handle
+            .inner
+            .plans
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        match plans.get("configs") {
+            Some(plan) => plan.clone(),
+            None => return Ok(()),
+        }
+    };
+
+    let live = db.execute(
+        "SELECT sql FROM sqlite_schema WHERE type = 'trigger' AND name IN
+            ('_sync_ins_configs', '_sync_upd_configs', '_sync_del_configs')",
+        &Default::default(),
+    )?;
+    let live: Vec<String> = live
+        .into_iter()
+        .filter_map(|row| row.first().and_then(Value::as_str).map(str::to_string))
+        .collect();
+
+    let wanted_insert = configs_when_clause(false);
+    let wanted_delete = configs_when_clause(true);
+    let up_to_date = live.len() == 3
+        && live
+            .iter()
+            .filter(|sql| sql.contains(&wanted_insert))
+            .count()
+            == 2
+        && live.iter().any(|sql| sql.contains(&wanted_delete));
+    if up_to_date {
+        return Ok(());
+    }
+
+    for sql in drop_trigger_sqls("configs") {
+        db.execute_non_query(&sql, &Default::default())?;
+    }
+    for sql in trigger_sqls("configs", &plan, &handle.inner.device) {
+        db.execute_non_query(&sql, &Default::default())?;
+    }
+    Ok(())
+}
+
 /// (Re)scan local tables and keep capture in sync with schema evolution:
 /// - new tables (per-user at login, or shipped by an app update) are derived
 ///   or matched against the catalog and start capturing;
@@ -657,6 +706,10 @@ pub fn refresh_capture(db: &DatabaseService, handle: &SyncCaptureHandle) -> Resu
             handle.inner.plans.write().unwrap().insert(table, plan);
         }
     }
+
+    // The configs trigger carries the exclusion list, which is invisible to the
+    // column-drift check above: repair it before scanning for new tables.
+    refresh_configs_trigger(db, handle)?;
 
     // New tables: catalog match, explicit registration, or derivation.
     let prefixes = observed_per_user_prefixes(db)?;
@@ -1921,6 +1974,48 @@ mod tests {
 
     fn setup_gamelog(db: &DatabaseService) {
         crate::game_log::ensure_game_log_tables(db).unwrap();
+    }
+
+    #[test]
+    fn stale_configs_trigger_is_repaired_by_refresh() {
+        let db = test_db("configs-trigger-repair");
+        crate::config::set_string(&db, "config:vrcx_remotesync.collectorpriority", "20").unwrap();
+        let handle = install_capture(&db).unwrap();
+
+        // Simulate a trigger left behind by an older build: no exclusion list.
+        for sql in drop_trigger_sqls("configs") {
+            db.execute_non_query(&sql, &Default::default()).unwrap();
+        }
+        db.execute_non_query(
+            "CREATE TRIGGER \"_sync_ins_configs\" AFTER INSERT ON \"configs\"
+             BEGIN SELECT 1; END",
+            &Default::default(),
+        )
+        .unwrap();
+
+        // One refresh on the live handle must notice and rebuild all three.
+        refresh_capture(&db, &handle).unwrap();
+
+        let live = db
+            .execute(
+                "SELECT sql FROM sqlite_schema WHERE type = 'trigger' AND name LIKE '_sync%configs'",
+                &Default::default(),
+            )
+            .unwrap();
+        let live: Vec<String> = live
+            .into_iter()
+            .filter_map(|row| row.first().and_then(Value::as_str).map(str::to_string))
+            .collect();
+        assert_eq!(live.len(), 3, "all three configs triggers are back");
+        assert!(
+            live.iter().all(|sql| sql.contains("collectorpriority")),
+            "every trigger carries the current exclusion list"
+        );
+
+        // And a write to an excluded key stays out of the outbox afterwards.
+        let before = outbox_pending_count(&db).unwrap();
+        crate::config::set_string(&db, "config:vrcx_remotesync.collectorpriority", "30").unwrap();
+        assert_eq!(outbox_pending_count(&db).unwrap(), before);
     }
 
     #[test]
