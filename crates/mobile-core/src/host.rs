@@ -28,6 +28,19 @@ use vrcx_0_composition::{
 /// phone used to pass an empty string - which the sync host treats as "hide it" - so the device list
 /// showed a bare id (or, worse, another machine's name on the row the two of them shared).
 pub fn build_host(app_data_dir: &Path, device_name: &str) -> Result<RuntimeHostState, String> {
+    // Kotlin hands over `Context.getFilesDir()`, but VRCX keeps its own folder inside the platform's
+    // data directory - the desktop resolves `%APPDATA%\VRCX-0`, not `%APPDATA%`. Appending the same
+    // name here makes the two layouts identical (database, image cache and secrets key all under
+    // `.../VRCX-0/`), which is also where the secrets key already lived: `platform` resolved
+    // `default_app_data_dir()` by appending it, while the database was written one level up.
+    let app_data_dir = &app_data_dir.join("VRCX-0");
+    migrate_legacy_layout(app_data_dir)?;
+
+    // Tell `platform` where this app keeps its data. Android has no usable `HOME`, so the desktop
+    // resolution (`dirs::config_dir()`) cannot produce this path; Kotlin passes `filesDir` in and the
+    // override carries it to the code that needs it (error log, secrets key).
+    vrcx_0_platform::app_paths::set_app_data_dir_override(app_data_dir.to_path_buf());
+
     let resolution = AppDataDirResolution {
         current_dir: app_data_dir.to_path_buf(),
         default_dir: app_data_dir.to_path_buf(),
@@ -85,4 +98,39 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(dir);
     }
+}
+
+/// Moves a database written by an earlier build (`<files>/VRCX-0.sqlite3`) into the app folder now
+/// that the layout matches the desktop (`<files>/VRCX-0/VRCX-0.sqlite3`).
+///
+/// Runs on every start but does nothing once the new file exists, so a crash halfway through is
+/// retried instead of silently starting from an empty database. The WAL and shared-memory files move
+/// with it: leaving the WAL behind would silently drop the tail of the log.
+fn migrate_legacy_layout(app_data_dir: &Path) -> Result<(), String> {
+    const DB_FILE: &str = "VRCX-0.sqlite3";
+    let Some(parent) = app_data_dir.parent() else {
+        return Ok(());
+    };
+    let legacy = parent.join(DB_FILE);
+    let target = app_data_dir.join(DB_FILE);
+    if !legacy.is_file() || target.exists() {
+        return Ok(());
+    }
+    std::fs::create_dir_all(app_data_dir)
+        .map_err(|error| format!("create {}: {error}", app_data_dir.display()))?;
+    for suffix in ["", "-wal", "-shm"] {
+        let from = parent.join(format!("{DB_FILE}{suffix}"));
+        if !from.is_file() {
+            continue;
+        }
+        let to = app_data_dir.join(format!("{DB_FILE}{suffix}"));
+        std::fs::rename(&from, &to).map_err(|error| {
+            format!(
+                "move {} to {}: {error}",
+                from.display(),
+                to.display()
+            )
+        })?;
+    }
+    Ok(())
 }
