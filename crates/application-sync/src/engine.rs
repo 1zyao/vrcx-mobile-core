@@ -205,7 +205,11 @@ impl RemoteSyncEngine {
     }
 
     pub fn bootstrap_progress(&self) -> SyncBootstrapProgress {
-        self.state.lock().unwrap().progress.clone()
+        self.state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .progress
+            .clone()
     }
 
     pub fn configured_interval(&self) -> u64 {
@@ -217,15 +221,24 @@ impl RemoteSyncEngine {
     }
 
     fn set_phase(&self, phase: &str) {
-        self.state.lock().unwrap().phase = phase.to_string();
+        self.state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .phase = phase.to_string();
     }
 
     fn set_error(&self, message: Option<String>) {
-        self.state.lock().unwrap().last_error = message;
+        self.state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .last_error = message;
     }
 
     fn set_progress(&self, update: impl FnOnce(&mut SyncBootstrapProgress)) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         update(&mut state.progress);
     }
 
@@ -305,7 +318,10 @@ impl RemoteSyncEngine {
             pulled: counts.pulled,
             error: None,
         });
-        let mut state = self.state.lock().unwrap();
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         state.stats = CycleStats {
             pushed: counts.pushed,
             pulled: counts.pulled,
@@ -335,7 +351,11 @@ impl RemoteSyncEngine {
     }
 
     fn stats_snapshot(&self) -> CycleStats {
-        self.state.lock().unwrap().stats.clone()
+        self.state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .stats
+            .clone()
     }
 
     /// Normalized collector role for this device.
@@ -354,9 +374,7 @@ impl RemoteSyncEngine {
         let raw = vrcx_0_persistence::config::get_string(&self.db, CONFIG_COLLECTOR_ROLE, "")
             .unwrap_or_default();
         match raw.trim().to_ascii_lowercase().as_str() {
-            "forced" | "true" | "1" | "yes" => {
-                vrcx_0_contracts::DEVICE_ROLE_FORCED.to_string()
-            }
+            "forced" | "true" | "1" | "yes" => vrcx_0_contracts::DEVICE_ROLE_FORCED.to_string(),
             "off" | "false" | "0" | "no" => "off".to_string(),
             _ => vrcx_0_contracts::DEVICE_ROLE_AUTO.to_string(),
         }
@@ -792,7 +810,10 @@ impl RemoteSyncEngine {
 
     /// Phase and last error without holding the lock across an await.
     fn phase_snapshot(&self) -> (String, Option<String>) {
-        let state = self.state.lock().unwrap();
+        let state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         (state.phase.clone(), state.last_error.clone())
     }
 
@@ -802,13 +823,21 @@ impl RemoteSyncEngine {
     async fn ensure_remote_schema_if_changed(self: &Arc<Self>) -> EngineResult<()> {
         let schema = remote_schema_snapshot(&self.db)?;
         let hash = schema_hash(&schema);
-        if *self.ensured_schema_hash.lock().unwrap() == Some(hash) {
+        if *self
+            .ensured_schema_hash
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            == Some(hash)
+        {
             return Ok(());
         }
         self.store
             .ensure_schema(&schema, SYNC_PROTOCOL_SCHEMA_VERSION)
             .await?;
-        *self.ensured_schema_hash.lock().unwrap() = Some(hash);
+        *self
+            .ensured_schema_hash
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(hash);
         Ok(())
     }
 
