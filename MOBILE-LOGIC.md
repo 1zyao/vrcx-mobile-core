@@ -936,3 +936,73 @@ rows=10
 
 要让手机 7x24 跟上桌面，缺的是核心间同步协议：凭据协商（不是复制 secrets.key）、增量拉取、
 冲突处理。这是下一个真正的里程碑，比继续翻写操作更重要。
+
+## 第 39-51 轮：同步已通，读域收口，一次失败与一次误报
+
+上一节末尾那句"搬运没有实现"是错的，这里更正并补上后续。
+
+### 更正：同步一直是实现的
+
+VRCX 的 remoteSync 是 **PostgreSQL 共享库**（`config:vrcx_remotesync.*`），`crates/application-sync`
++ `crates/outbound-adapters/src/remote_sync_postgres.rs` 早就在。缺的只有一件事：手机的
+`start_core()` 从没调 `start_data_services()` —— 桌面（`state.rs:1502`）和 headless
+（`startup.rs:165`）都调了，手机没有。
+
+数据库直接给出证据：
+
+```
+修复前：sync.lastCycleAt = 2026-11-16T20:46:30Z   pullCursor = 838977（= 复制来的桌面库，从未变过）
+修复后：sync.lastCycleAt = 2026-11-17T00:11:44Z   pullCursor = 839096（+119 拉取）
+```
+
+`contracts/src/sync.rs` 的 `_feed_gps` 模板说明动态表本就在同步集合里。
+
+### 读域收口（命令 42 → 50）
+
+```
+群组页   group_get / members_get / posts_get / user_instances_get / gallery_get   → 页面 0 proxy
+模型     avatar_get（本仓库新增命名）/ avatar_styles_get
+最近访问 改为读游戏日志（见下）
+```
+
+`app__vrchat_avatar_get` 是我们自己加的名字，代码里写明了原因：cloud 的 `app__avatar_get`
+是**本地缓存读**，cloud 读单个模型走列表或相册命令。请求体仍是协议层的 `avatar_get_input`。
+
+### 最近访问：一次失败，然后换对方向
+
+第一次尝试保留世界卡片、逐行 `app__world_get` 补缩略图 —— 真机一直转圈。原因是
+`app__world_get(full=false)` **缓存未命中会回落网络**，50 张卡片等于最多 50 次 VRChat 请求，
+而原来的实现只有 1 次。已回退，原因写在 `WorldsApi.getRecentWorlds` 上方。
+
+第二次改成渲染录制里真有的东西（世界名 / 时间 / 时长 / 同场人数），页面 **0 proxy**：
+
+```
+来发会呆吧        11-13 23:24 · 42 分钟 · 1 人
+Let me decay      11-13 23:17 · 6 分钟 · 8 人
+Travel to me.     11-11 21:14 · 1 小时 21 分钟 · 2 人
+```
+
+### 一次必须记住的误报
+
+我曾报告 `app__game_log_sessions_query` 返回空世界名，并断言是持久层映射 bug。**结论是错的**：
+会话 DTO 是 `#[serde(rename_all = "camelCase")]`，线上字段是 `worldName`，我读的是 `world_name`。
+唯一读对的 `created_at` 恰好有显式 `#[serde(rename = "created_at")]`，让错误假设看起来自洽。
+
+诚实记录这件事，是因为它差点导致去改一段**桌面和手机共用且正确**的持久层代码。
+
+### 第 52 轮：全站回归 sweep（15 步）
+
+```
+首页(位置) 0 · 首页(动态) 0 · 收藏(玩家/世界/模型/群组) 0 0 0 0
+通知 0 · 搜索页 0 · 世界页 0
+群组页(详情/帖子/成员/相册) 0 0 0 0 —— 两个不同群组(皇家女仆团 / CHOCOLAT)
+最近访问(录制) 0 · 设置·隐私与数据(同步卡片) 0
+个人资料页(群组/创建的世界/创建的模型/收藏的世界 均有内容) 0
+```
+
+### 仍然没有规范命令的域
+
+cloud 对下列域**没有命令**，移植等于自己造名字：库存、图库/打印、邀请消息、共同好友（cloud 的
+`app__user_mutual_friends_list_get` 读的是本地 mutual graph，不是 HTTP）。
+这些页面的透传仍在（`UsersApi` 14 处、`AvatarsApi` 7 处、`WorldsApi` 6 处、`InviteApi` 6 处…），
+其中绝大多数是写操作。
