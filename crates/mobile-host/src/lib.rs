@@ -1207,6 +1207,46 @@ async fn app__vrchat_media_print_delete(
     serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
 }
 
+#[derive(serde::Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+struct VrchatMediaInventoryTemplateInput {
+    #[serde(default)]
+    inventory_template_id: String,
+}
+
+#[derive(serde::Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+struct VrchatMediaRewardRedeemInput {
+    #[serde(default)]
+    code: String,
+}
+
+/// `GET inventory/template/{id}` (`app__vrchat_media_inventory_template_get`).
+async fn app__vrchat_media_inventory_template_get(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<VrchatMediaInventoryTemplateInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let response = state
+        .vrchat_remote()
+        .inventory_template(args.input.inventory_template_id)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+/// `POST reward/redeem` (`app__vrchat_media_reward_redeem`).
+async fn app__vrchat_media_reward_redeem(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<VrchatMediaRewardRedeemInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let response = state
+        .vrchat_remote()
+        .redeem_reward(args.input.code)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
 /// The 探索 tab of the search page: `GET instances/active` (`app__vrchat_instances_active_get`).
 ///
 /// Upstream does the paging itself (a request pacer and a page cap live in the facade), so this is a
@@ -1899,6 +1939,19 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         "app__vrchat_media_print_delete",
         app__vrchat_media_print_delete,
     );
+    registry.register_typed::<
+        InputArgs<VrchatMediaInventoryTemplateInput>,
+        serde_json::Value,
+        _,
+        _,
+    >(
+        "app__vrchat_media_inventory_template_get",
+        app__vrchat_media_inventory_template_get,
+    );
+    registry.register_typed::<InputArgs<VrchatMediaRewardRedeemInput>, serde_json::Value, _, _>(
+        "app__vrchat_media_reward_redeem",
+        app__vrchat_media_reward_redeem,
+    );
     registry.register_typed::<InputArgs<PrintsArgs>, serde_json::Value, _, _>(
         "app__vrchat_media_prints_get",
         app__vrchat_media_prints_get,
@@ -2131,7 +2184,7 @@ mod tests {
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 90);
+        assert_eq!(registry.len(), 92);
     }
 }
 
