@@ -1308,6 +1308,25 @@ async fn app__vrchat_group_representation_set(
     serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
 }
 
+#[derive(serde::Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+struct VrchatWorldSaveInput {
+    #[serde(default)]
+    world_id: String,
+    params: vrcx_0_contracts::vrchat_requests::WorldUpdateRequest,
+}
+
+/// `PUT worlds/{id}` (`app__vrchat_world_save`).
+async fn app__vrchat_world_save(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<VrchatWorldSaveInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let response = vrchat_calls::world_save(&state, args.input.world_id, args.input.params)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
 /// The 探索 tab of the search page: `GET instances/active` (`app__vrchat_instances_active_get`).
 ///
 /// Upstream does the paging itself (a request pacer and a page cap live in the facade), so this is a
@@ -2029,6 +2048,10 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         "app__vrchat_group_representation_set",
         app__vrchat_group_representation_set,
     );
+    registry.register_typed::<InputArgs<VrchatWorldSaveInput>, serde_json::Value, _, _>(
+        "app__vrchat_world_save",
+        app__vrchat_world_save,
+    );
     registry.register_typed::<InputArgs<PrintsArgs>, serde_json::Value, _, _>(
         "app__vrchat_media_prints_get",
         app__vrchat_media_prints_get,
@@ -2261,7 +2284,7 @@ mod tests {
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 96);
+        assert_eq!(registry.len(), 97);
     }
 }
 

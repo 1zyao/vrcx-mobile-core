@@ -218,3 +218,13 @@ pub async fn group_representation_set(
     )
     .await
 }
+/// `PUT worlds/{id}` (`app__vrchat_world_save`).
+pub async fn world_save(
+    state: &RuntimeHostState,
+    world_id: String,
+    params: vrcx_0_contracts::vrchat_requests::WorldUpdateRequest,
+) -> Result<VrchatResponse> {
+    let (world_id, request) =
+        vrcx_0_vrchat_protocol::worlds::world_save_input(VRCHAT_API_DEFAULT_ENDPOINT.into(), world_id, params)?;
+    run(state, "app__vrchat_world_save", format!("Saving world {world_id}."), request).await
+}
