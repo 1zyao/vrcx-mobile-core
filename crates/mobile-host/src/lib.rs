@@ -1197,6 +1197,80 @@ async fn app__vrchat_instances_discover_get(
         .map_err(|error| CommandError::failed(error.to_string()))?;
     serde_json::to_value(rows).map_err(|error| CommandError::failed(error.to_string()))
 }
+/// Builds the actions the social notification chains need, from the host's public surface.
+///
+/// The desktop does the same in `runtime-host-desktop/src/social.rs`: capture an authenticated mutation
+/// context, then hand the database, web client, event bus, world cache and a media-upload preprocessor to
+/// `LocalNotificationChainActions`. Nothing here is phone-specific except that it is assembled locally.
+fn notification_chain_actions<'a>(
+    state: &'a RuntimeHostState,
+    media_upload: &'a dyn vrcx_0_application::media::MediaUploadPreprocessor,
+) -> Result<vrcx_0_outbound_adapters::LocalNotificationChainActions<'a>, CommandError> {
+    let assembly = state.desktop_assembly();
+    let mutation = vrcx_0_application_core::AuthenticatedMutationContext::capture(
+        assembly.auth_scope(),
+        assembly.remote_mutations(),
+        "Notification action",
+    )
+    .map_err(|error| CommandError::failed(error.to_string()))?;
+    Ok(vrcx_0_outbound_adapters::LocalNotificationChainActions::new(
+        state.database().as_ref(),
+        state.web_client().as_ref(),
+        mutation,
+        assembly.event_bus(),
+        assembly.world_cache().as_ref(),
+        media_upload,
+    ))
+}
+
+/// Send an invite through the social notification chain (`app__notification_instance_invite_send`).
+///
+/// This is the desktop's route for "invite this user to my instance": the chain sends the VRChat request
+/// **and** writes the local notification row, which is why it is not the plain invite API.
+async fn app__notification_instance_invite_send(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<vrcx_0_application::social::NotificationInstanceInviteInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let media = vrcx_0_outbound_adapters::LocalMediaUploadAdapter::new(Arc::clone(state.web_client()));
+    let outcome = {
+        let actions = notification_chain_actions(&state, &media)?;
+        vrcx_0_application::social::send_instance_invite_notification(&actions, args.input)
+            .await
+            .map_err(|error| CommandError::failed(error.to_string()))?
+    };
+    serde_json::to_value(outcome).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+/// Respond to an invite (`app__notification_invite_response_send`), optionally with a photo.
+async fn app__notification_invite_response_send(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<vrcx_0_application::social::NotificationInviteResponseInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let media = vrcx_0_outbound_adapters::LocalMediaUploadAdapter::new(Arc::clone(state.web_client()));
+    let outcome = {
+        let actions = notification_chain_actions(&state, &media)?;
+        vrcx_0_application::social::send_invite_response_notification(&actions, args.input)
+            .await
+            .map_err(|error| CommandError::failed(error.to_string()))?
+    };
+    serde_json::to_value(outcome).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+/// Accept a request-invite notification (`app__notification_request_invite_accept`).
+async fn app__notification_request_invite_accept(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<vrcx_0_application::social::NotificationRequestInviteAcceptInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let media = vrcx_0_outbound_adapters::LocalMediaUploadAdapter::new(Arc::clone(state.web_client()));
+    let outcome = {
+        let actions = notification_chain_actions(&state, &media)?;
+        vrcx_0_application::social::accept_request_invite_notification(&actions, args.input)
+            .await
+            .map_err(|error| CommandError::failed(error.to_string()))?
+    };
+    serde_json::to_value(outcome).map_err(|error| CommandError::failed(error.to_string()))
+}
+
 /// Invite shapes, copied from the desktop's `src-tauri/.../notifications/types.rs` and
 /// `.../tools/types.rs`: the frontend already speaks these names, so they travel unchanged.
 #[derive(serde::Deserialize, specta::Type)]
@@ -1523,6 +1597,33 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
     registry.register_typed::<InputArgs<VrchatToolsInviteMessageEditInput>, serde_json::Value, _, _>(
         "app__vrchat_tools_invite_message_edit",
         app__vrchat_tools_invite_message_edit,
+    );
+    registry.register_typed::<
+        InputArgs<vrcx_0_application::social::NotificationInstanceInviteInput>,
+        serde_json::Value,
+        _,
+        _,
+    >(
+        "app__notification_instance_invite_send",
+        app__notification_instance_invite_send,
+    );
+    registry.register_typed::<
+        InputArgs<vrcx_0_application::social::NotificationInviteResponseInput>,
+        serde_json::Value,
+        _,
+        _,
+    >(
+        "app__notification_invite_response_send",
+        app__notification_invite_response_send,
+    );
+    registry.register_typed::<
+        InputArgs<vrcx_0_application::social::NotificationRequestInviteAcceptInput>,
+        serde_json::Value,
+        _,
+        _,
+    >(
+        "app__notification_request_invite_accept",
+        app__notification_request_invite_accept,
     );
     registry.register_typed::<serde_json::Value, serde_json::Value, _, _>(
         "app__vrchat_instances_active_get",
@@ -1853,7 +1954,7 @@ mod tests {
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 79);
+        assert_eq!(registry.len(), 82);
     }
 }
 
