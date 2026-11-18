@@ -10198,7 +10198,7 @@ dependencies = [
  "vrcx-0-vrchat-client",
  "vrcx-0-vrchat-protocol",
  "walkdir",
- "webpki-roots 0.26.11",
+ "webpki-roots 1.0.12",
  "zip",
 ]
 
@@ -10374,7 +10374,7 @@ dependencies = [
  "url",
  "vrcx-0-contracts",
  "vrcx-0-core",
- "webpki-roots 0.26.11",
+ "webpki-roots 1.0.12",
 ]
 
 [[package]]
