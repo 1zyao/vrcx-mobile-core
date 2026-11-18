@@ -181,3 +181,40 @@ pub async fn avatar_moderation_delete(
     )
     .await
 }
+/// `DELETE worlds/{id}` (`app__vrchat_world_delete`).
+pub async fn world_delete(state: &RuntimeHostState, world_id: String) -> Result<VrchatResponse> {
+    let (world_id, request) =
+        vrcx_0_vrchat_protocol::worlds::world_delete_input(VRCHAT_API_DEFAULT_ENDPOINT.into(), world_id)?;
+    run(state, "app__vrchat_world_delete", format!("Deleting world {world_id}."), request).await
+}
+
+/// `PUT worlds/{id}/publish` (`app__vrchat_world_publish`).
+pub async fn world_publish(state: &RuntimeHostState, world_id: String) -> Result<VrchatResponse> {
+    let (world_id, request) =
+        vrcx_0_vrchat_protocol::worlds::world_publish_input(VRCHAT_API_DEFAULT_ENDPOINT.into(), world_id)?;
+    run(state, "app__vrchat_world_publish", format!("Publishing world {world_id}."), request).await
+}
+
+/// `DELETE worlds/{id}/publish` (`app__vrchat_world_unpublish`).
+pub async fn world_unpublish(state: &RuntimeHostState, world_id: String) -> Result<VrchatResponse> {
+    let (world_id, request) =
+        vrcx_0_vrchat_protocol::worlds::world_unpublish_input(VRCHAT_API_DEFAULT_ENDPOINT.into(), world_id)?;
+    run(state, "app__vrchat_world_unpublish", format!("Unpublishing world {world_id}."), request).await
+}
+
+/// `PUT groups/{id}/representation` (`app__vrchat_group_representation_set`).
+pub async fn group_representation_set(
+    state: &RuntimeHostState,
+    group_id: String,
+    is_representing: bool,
+) -> Result<VrchatResponse> {
+    let (group_id, request) =
+        vrcx_0_vrchat_protocol::groups::representation_set_input(group_id, is_representing)?;
+    run(
+        state,
+        "app__vrchat_group_representation_set",
+        format!("Setting representation for group {group_id}."),
+        request,
+    )
+    .await
+}

@@ -1247,6 +1247,67 @@ async fn app__vrchat_media_reward_redeem(
     serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
 }
 
+#[derive(serde::Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+struct VrchatWorldIdInput {
+    world_id: String,
+}
+
+#[derive(serde::Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+struct VrchatGroupRepresentationInput {
+    group_id: String,
+    is_representing: bool,
+}
+
+/// `DELETE worlds/{id}` (`app__vrchat_world_delete`).
+async fn app__vrchat_world_delete(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<VrchatWorldIdInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let response = vrchat_calls::world_delete(&state, args.input.world_id)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+/// `PUT worlds/{id}/publish` (`app__vrchat_world_publish`).
+async fn app__vrchat_world_publish(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<VrchatWorldIdInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let response = vrchat_calls::world_publish(&state, args.input.world_id)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+/// `DELETE worlds/{id}/publish` (`app__vrchat_world_unpublish`).
+async fn app__vrchat_world_unpublish(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<VrchatWorldIdInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let response = vrchat_calls::world_unpublish(&state, args.input.world_id)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+/// `PUT groups/{id}/representation` (`app__vrchat_group_representation_set`).
+async fn app__vrchat_group_representation_set(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<VrchatGroupRepresentationInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let response = vrchat_calls::group_representation_set(
+        &state,
+        args.input.group_id,
+        args.input.is_representing,
+    )
+    .await
+    .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
 /// The 探索 tab of the search page: `GET instances/active` (`app__vrchat_instances_active_get`).
 ///
 /// Upstream does the paging itself (a request pacer and a page cap live in the facade), so this is a
@@ -1952,6 +2013,22 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         "app__vrchat_media_reward_redeem",
         app__vrchat_media_reward_redeem,
     );
+    registry.register_typed::<InputArgs<VrchatWorldIdInput>, serde_json::Value, _, _>(
+        "app__vrchat_world_delete",
+        app__vrchat_world_delete,
+    );
+    registry.register_typed::<InputArgs<VrchatWorldIdInput>, serde_json::Value, _, _>(
+        "app__vrchat_world_publish",
+        app__vrchat_world_publish,
+    );
+    registry.register_typed::<InputArgs<VrchatWorldIdInput>, serde_json::Value, _, _>(
+        "app__vrchat_world_unpublish",
+        app__vrchat_world_unpublish,
+    );
+    registry.register_typed::<InputArgs<VrchatGroupRepresentationInput>, serde_json::Value, _, _>(
+        "app__vrchat_group_representation_set",
+        app__vrchat_group_representation_set,
+    );
     registry.register_typed::<InputArgs<PrintsArgs>, serde_json::Value, _, _>(
         "app__vrchat_media_prints_get",
         app__vrchat_media_prints_get,
@@ -2184,7 +2261,7 @@ mod tests {
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 92);
+        assert_eq!(registry.len(), 96);
     }
 }
 
