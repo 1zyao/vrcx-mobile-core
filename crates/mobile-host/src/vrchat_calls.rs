@@ -435,3 +435,24 @@ pub async fn favorite_group_save(
     )
     .await
 }
+/// `PUT groups/{groupId}/members/{userId}` (`app__vrchat_group_member_props_set`).
+pub async fn group_member_props_set(
+    state: &RuntimeHostState,
+    group_id: String,
+    user_id: String,
+    params: vrcx_0_contracts::vrchat_requests::GroupMemberPatch,
+) -> Result<VrchatResponse> {
+    let (group_id, user_id, request) = vrcx_0_vrchat_protocol::groups::member_props_set_input(
+        VRCHAT_API_DEFAULT_ENDPOINT.into(),
+        group_id,
+        user_id,
+        params,
+    )?;
+    run(
+        state,
+        "app__vrchat_group_member_props_set",
+        format!("Updating member {user_id} in {group_id}."),
+        request,
+    )
+    .await
+}
