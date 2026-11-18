@@ -1169,6 +1169,67 @@ async fn app__vrchat_instance_get(
     serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
 }
 
+/// The 探索 tab of the search page: `GET instances/active` (`app__vrchat_instances_active_get`).
+///
+/// Upstream does the paging itself (a request pacer and a page cap live in the facade), so this is a
+/// straight pass-through. The shape is `Vec<RawJson>`, the same as the desktop command.
+async fn app__vrchat_instances_active_get(
+    state: Arc<RuntimeHostState>,
+    _args: serde_json::Value,
+) -> Result<serde_json::Value, CommandError> {
+    let rows = state
+        .vrchat_remote()
+        .active_instances()
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(rows).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+/// `GET instances/discover` (`app__vrchat_instances_discover_get`), the other half of 探索.
+async fn app__vrchat_instances_discover_get(
+    state: Arc<RuntimeHostState>,
+    _args: serde_json::Value,
+) -> Result<serde_json::Value, CommandError> {
+    let rows = state
+        .vrchat_remote()
+        .discover_instances()
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(rows).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+/// Flat arguments, matching how the desktop command is called (`appWorldRecentFriendCounts(worldIds)`).
+#[derive(serde::Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+struct WorldRecentFriendCountsArgs {
+    world_ids: Vec<String>,
+}
+
+/// How many friends visited these worlds in the last week (`app__world_recent_friend_counts`).
+///
+/// The 7-day window belongs to `LocalDataStore::world_recent_friend_counts` - the adapter the desktop
+/// host calls - so it is not re-derived here. Scoped to the signed-in owner: the rows are that user's
+/// friend visits, and answering without a scope would read another identity's data.
+async fn app__world_recent_friend_counts(
+    state: Arc<RuntimeHostState>,
+    args: WorldRecentFriendCountsArgs,
+) -> Result<serde_json::Value, CommandError> {
+    let owner = state
+        .require_active_scope("World recent friend counts")
+        .map_err(|error| CommandError::failed(error.to_string()))?
+        .current_user_id;
+    let db = Arc::clone(state.database());
+    let world_ids = args.world_ids;
+    let rows = tokio::task::spawn_blocking(move || {
+        vrcx_0_outbound_adapters::LocalDataStore::new(db)
+            .world_recent_friend_counts(&vrcx_0_core::OwnerId::new(owner), world_ids)
+    })
+    .await
+    .map_err(|error| CommandError::failed(format!("friend count task failed: {error}")))?
+    .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(rows).map_err(|error| CommandError::failed(error.to_string()))
+}
+
 async fn app__vrchat_auth_current_user_get(
     state: Arc<RuntimeHostState>,
     _args: serde_json::Value,
@@ -1348,6 +1409,18 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
     registry.register_typed::<InputArgs<InstanceIdentityInput>, serde_json::Value, _, _>(
         "app__vrchat_instance_get",
         app__vrchat_instance_get,
+    );
+    registry.register_typed::<serde_json::Value, serde_json::Value, _, _>(
+        "app__vrchat_instances_active_get",
+        app__vrchat_instances_active_get,
+    );
+    registry.register_typed::<serde_json::Value, serde_json::Value, _, _>(
+        "app__vrchat_instances_discover_get",
+        app__vrchat_instances_discover_get,
+    );
+    registry.register_typed::<WorldRecentFriendCountsArgs, serde_json::Value, _, _>(
+        "app__world_recent_friend_counts",
+        app__world_recent_friend_counts,
     );
     registry.register_typed::<
         InputArgs<vrcx_0_application::social::UserDialogTabCountsInput>,
@@ -1666,7 +1739,7 @@ mod tests {
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 72);
+        assert_eq!(registry.len(), 75);
     }
 }
 
