@@ -1403,6 +1403,45 @@ async fn app__vrchat_world_persistent_data_delete(
     serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
 }
 
+#[derive(serde::Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+struct VrchatInstanceCloseInput {
+    location: String,
+    #[serde(default)]
+    hard_close: bool,
+}
+
+#[derive(serde::Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+struct VrchatInstanceCreateInput {
+    params: vrcx_0_contracts::vrchat_requests::InstanceCreateRequest,
+}
+
+/// `DELETE instances/{location}` (`app__vrchat_instance_close`).
+///
+/// `hard_close` mirrors the desktop: false closes the instance once it empties, true closes it now.
+async fn app__vrchat_instance_close(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<VrchatInstanceCloseInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let response =
+        vrchat_calls::instance_close(&state, args.input.location, args.input.hard_close)
+            .await
+            .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+/// `POST instances` (`app__vrchat_instance_create`).
+async fn app__vrchat_instance_create(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<VrchatInstanceCreateInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let response = vrchat_calls::instance_create(&state, args.input.params)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
 /// The 探索 tab of the search page: `GET instances/active` (`app__vrchat_instances_active_get`).
 ///
 /// Upstream does the paging itself (a request pacer and a page cap live in the facade), so this is a
@@ -2154,6 +2193,14 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         "app__vrchat_world_persistent_data_delete",
         app__vrchat_world_persistent_data_delete,
     );
+    registry.register_typed::<InputArgs<VrchatInstanceCloseInput>, serde_json::Value, _, _>(
+        "app__vrchat_instance_close",
+        app__vrchat_instance_close,
+    );
+    registry.register_typed::<InputArgs<VrchatInstanceCreateInput>, serde_json::Value, _, _>(
+        "app__vrchat_instance_create",
+        app__vrchat_instance_create,
+    );
     registry.register_typed::<InputArgs<PrintsArgs>, serde_json::Value, _, _>(
         "app__vrchat_media_prints_get",
         app__vrchat_media_prints_get,
@@ -2386,7 +2433,7 @@ mod tests {
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 101);
+        assert_eq!(registry.len(), 103);
     }
 }
 

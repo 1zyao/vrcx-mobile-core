@@ -305,3 +305,28 @@ pub async fn world_persistent_data_delete(
     )
     .await
 }
+/// `DELETE instances/{location}` (`app__vrchat_instance_close`).
+pub async fn instance_close(
+    state: &RuntimeHostState,
+    location: String,
+    hard_close: bool,
+) -> Result<VrchatResponse> {
+    let (location, request) = vrcx_0_vrchat_protocol::instances::instance_close_input(
+        VRCHAT_API_DEFAULT_ENDPOINT.into(),
+        location,
+        hard_close,
+    )?;
+    run(state, "app__vrchat_instance_close", format!("Closing instance {location}."), request).await
+}
+
+/// `POST instances` (`app__vrchat_instance_create`).
+pub async fn instance_create(
+    state: &RuntimeHostState,
+    params: vrcx_0_contracts::vrchat_requests::InstanceCreateRequest,
+) -> Result<VrchatResponse> {
+    let request = vrcx_0_vrchat_protocol::instances::instance_create_input(
+        VRCHAT_API_DEFAULT_ENDPOINT.into(),
+        params,
+    )?;
+    run(state, "app__vrchat_instance_create", "Creating instance.".to_string(), request).await
+}
