@@ -330,3 +330,59 @@ pub async fn instance_create(
     )?;
     run(state, "app__vrchat_instance_create", "Creating instance.".to_string(), request).await
 }
+/// `DELETE avatars/{id}` (`app__vrchat_avatar_delete`).
+pub async fn avatar_delete(state: &RuntimeHostState, avatar_id: String) -> Result<VrchatResponse> {
+    let (avatar_id, request) =
+        vrcx_0_vrchat_protocol::avatars::avatar_delete_input(VRCHAT_API_DEFAULT_ENDPOINT.into(), avatar_id)?;
+    run(state, "app__vrchat_avatar_delete", format!("Deleting avatar {avatar_id}."), request).await
+}
+
+/// `PUT avatars/{id}` (`app__vrchat_avatar_save`).
+pub async fn avatar_save(
+    state: &RuntimeHostState,
+    avatar_id: String,
+    params: vrcx_0_contracts::vrchat_requests::AvatarUpdateRequest,
+) -> Result<VrchatResponse> {
+    let (avatar_id, request) = vrcx_0_vrchat_protocol::avatars::avatar_save_input(
+        VRCHAT_API_DEFAULT_ENDPOINT.into(),
+        avatar_id,
+        params,
+    )?;
+    run(state, "app__vrchat_avatar_save", format!("Saving avatar {avatar_id}."), request).await
+}
+
+/// `POST avatars/{id}/impostor/enqueue` (`app__vrchat_avatar_impostor_create`).
+pub async fn avatar_impostor_create(
+    state: &RuntimeHostState,
+    avatar_id: String,
+) -> Result<VrchatResponse> {
+    let (avatar_id, request) = vrcx_0_vrchat_protocol::avatars::avatar_impostor_create_input(
+        VRCHAT_API_DEFAULT_ENDPOINT.into(),
+        avatar_id,
+    )?;
+    run(
+        state,
+        "app__vrchat_avatar_impostor_create",
+        format!("Queueing impostor for {avatar_id}."),
+        request,
+    )
+    .await
+}
+
+/// `DELETE avatars/{id}/impostor` (`app__vrchat_avatar_impostor_delete`).
+pub async fn avatar_impostor_delete(
+    state: &RuntimeHostState,
+    avatar_id: String,
+) -> Result<VrchatResponse> {
+    let (avatar_id, request) = vrcx_0_vrchat_protocol::avatars::avatar_impostor_delete_input(
+        VRCHAT_API_DEFAULT_ENDPOINT.into(),
+        avatar_id,
+    )?;
+    run(
+        state,
+        "app__vrchat_avatar_impostor_delete",
+        format!("Removing impostor for {avatar_id}."),
+        request,
+    )
+    .await
+}

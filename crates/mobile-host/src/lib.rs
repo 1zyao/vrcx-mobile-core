@@ -1442,6 +1442,64 @@ async fn app__vrchat_instance_create(
     serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
 }
 
+#[derive(serde::Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+struct VrchatAvatarIdInput {
+    avatar_id: String,
+}
+
+#[derive(serde::Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+struct VrchatAvatarSaveInput {
+    #[serde(default)]
+    avatar_id: String,
+    params: vrcx_0_contracts::vrchat_requests::AvatarUpdateRequest,
+}
+
+/// `DELETE avatars/{id}` (`app__vrchat_avatar_delete`).
+async fn app__vrchat_avatar_delete(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<VrchatAvatarIdInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let response = vrchat_calls::avatar_delete(&state, args.input.avatar_id)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+/// `PUT avatars/{id}` (`app__vrchat_avatar_save`).
+async fn app__vrchat_avatar_save(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<VrchatAvatarSaveInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let response = vrchat_calls::avatar_save(&state, args.input.avatar_id, args.input.params)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+/// `POST avatars/{id}/impostor/enqueue` (`app__vrchat_avatar_impostor_create`).
+async fn app__vrchat_avatar_impostor_create(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<VrchatAvatarIdInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let response = vrchat_calls::avatar_impostor_create(&state, args.input.avatar_id)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+/// `DELETE avatars/{id}/impostor` (`app__vrchat_avatar_impostor_delete`).
+async fn app__vrchat_avatar_impostor_delete(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<VrchatAvatarIdInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let response = vrchat_calls::avatar_impostor_delete(&state, args.input.avatar_id)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
 /// The 探索 tab of the search page: `GET instances/active` (`app__vrchat_instances_active_get`).
 ///
 /// Upstream does the paging itself (a request pacer and a page cap live in the facade), so this is a
@@ -2201,6 +2259,22 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         "app__vrchat_instance_create",
         app__vrchat_instance_create,
     );
+    registry.register_typed::<InputArgs<VrchatAvatarIdInput>, serde_json::Value, _, _>(
+        "app__vrchat_avatar_delete",
+        app__vrchat_avatar_delete,
+    );
+    registry.register_typed::<InputArgs<VrchatAvatarSaveInput>, serde_json::Value, _, _>(
+        "app__vrchat_avatar_save",
+        app__vrchat_avatar_save,
+    );
+    registry.register_typed::<InputArgs<VrchatAvatarIdInput>, serde_json::Value, _, _>(
+        "app__vrchat_avatar_impostor_create",
+        app__vrchat_avatar_impostor_create,
+    );
+    registry.register_typed::<InputArgs<VrchatAvatarIdInput>, serde_json::Value, _, _>(
+        "app__vrchat_avatar_impostor_delete",
+        app__vrchat_avatar_impostor_delete,
+    );
     registry.register_typed::<InputArgs<PrintsArgs>, serde_json::Value, _, _>(
         "app__vrchat_media_prints_get",
         app__vrchat_media_prints_get,
@@ -2433,7 +2507,7 @@ mod tests {
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 103);
+        assert_eq!(registry.len(), 107);
     }
 }
 
