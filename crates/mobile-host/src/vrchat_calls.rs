@@ -386,3 +386,52 @@ pub async fn avatar_impostor_delete(
     )
     .await
 }
+/// `DELETE favorite/group/{type}/{group}/{ownerId}` (`app__vrchat_favorite_group_clear`).
+pub async fn favorite_group_clear(
+    state: &RuntimeHostState,
+    owner_id: String,
+    favorite_type: vrcx_0_vrchat_protocol::favorites::VrchatFavoriteType,
+    group: String,
+) -> Result<VrchatResponse> {
+    let group_label = group.clone();
+    let (owner_id, request) = vrcx_0_vrchat_protocol::favorites::favorite_group_clear_input(
+        VRCHAT_API_DEFAULT_ENDPOINT.into(),
+        owner_id,
+        favorite_type,
+        group,
+    )?;
+    run(
+        state,
+        "app__vrchat_favorite_group_clear",
+        format!("Clearing favorite group {group_label} for {owner_id}."),
+        request,
+    )
+    .await
+}
+
+/// `PUT favorite/group/{type}/{group}/{ownerId}` (`app__vrchat_favorite_group_save`).
+pub async fn favorite_group_save(
+    state: &RuntimeHostState,
+    owner_id: String,
+    favorite_type: vrcx_0_vrchat_protocol::favorites::VrchatFavoriteType,
+    group: String,
+    display_name: Option<String>,
+    visibility: Option<vrcx_0_core::FavoriteGroupVisibility>,
+) -> Result<VrchatResponse> {
+    let group_label = group.clone();
+    let (owner_id, request) = vrcx_0_vrchat_protocol::favorites::favorite_group_save_input(
+        VRCHAT_API_DEFAULT_ENDPOINT.into(),
+        owner_id,
+        favorite_type,
+        group,
+        display_name,
+        visibility,
+    )?;
+    run(
+        state,
+        "app__vrchat_favorite_group_save",
+        format!("Saving favorite group {group_label} for {owner_id}."),
+        request,
+    )
+    .await
+}

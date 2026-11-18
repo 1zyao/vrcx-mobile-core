@@ -1500,6 +1500,60 @@ async fn app__vrchat_avatar_impostor_delete(
     serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
 }
 
+#[derive(serde::Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+struct VrchatFavoriteGroupClearInput {
+    owner_id: String,
+    favorite_type: vrcx_0_vrchat_protocol::favorites::VrchatFavoriteType,
+    group: String,
+}
+
+#[derive(serde::Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+struct VrchatFavoriteGroupSaveInput {
+    owner_id: String,
+    favorite_type: vrcx_0_vrchat_protocol::favorites::VrchatFavoriteType,
+    group: String,
+    #[serde(default)]
+    display_name: Option<String>,
+    #[serde(default)]
+    visibility: Option<vrcx_0_core::FavoriteGroupVisibility>,
+}
+
+/// `DELETE favorite/group/{type}/{group}/{ownerId}` (`app__vrchat_favorite_group_clear`).
+async fn app__vrchat_favorite_group_clear(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<VrchatFavoriteGroupClearInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let response = vrchat_calls::favorite_group_clear(
+        &state,
+        args.input.owner_id,
+        args.input.favorite_type,
+        args.input.group,
+    )
+    .await
+    .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+/// `PUT favorite/group/{type}/{group}/{ownerId}` (`app__vrchat_favorite_group_save`).
+async fn app__vrchat_favorite_group_save(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<VrchatFavoriteGroupSaveInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let response = vrchat_calls::favorite_group_save(
+        &state,
+        args.input.owner_id,
+        args.input.favorite_type,
+        args.input.group,
+        args.input.display_name,
+        args.input.visibility,
+    )
+    .await
+    .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
 /// The 探索 tab of the search page: `GET instances/active` (`app__vrchat_instances_active_get`).
 ///
 /// Upstream does the paging itself (a request pacer and a page cap live in the facade), so this is a
@@ -2275,6 +2329,19 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         "app__vrchat_avatar_impostor_delete",
         app__vrchat_avatar_impostor_delete,
     );
+    registry.register_typed::<
+        InputArgs<VrchatFavoriteGroupClearInput>,
+        serde_json::Value,
+        _,
+        _,
+    >(
+        "app__vrchat_favorite_group_clear",
+        app__vrchat_favorite_group_clear,
+    );
+    registry.register_typed::<InputArgs<VrchatFavoriteGroupSaveInput>, serde_json::Value, _, _>(
+        "app__vrchat_favorite_group_save",
+        app__vrchat_favorite_group_save,
+    );
     registry.register_typed::<InputArgs<PrintsArgs>, serde_json::Value, _, _>(
         "app__vrchat_media_prints_get",
         app__vrchat_media_prints_get,
@@ -2507,7 +2574,7 @@ mod tests {
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 107);
+        assert_eq!(registry.len(), 109);
     }
 }
 
