@@ -32,6 +32,7 @@ vrcx-0-composition = { path = "../composition" }
 vrcx-0-local-server = { path = "../local-server" }
 vrcx-0-mobile-host = { path = "../mobile-host" }
 vrcx-0-platform = { path = "../platform" }
+rustls = { workspace = true }
 
 
 

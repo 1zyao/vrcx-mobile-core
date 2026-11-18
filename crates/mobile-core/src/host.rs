@@ -22,12 +22,36 @@ use vrcx_0_composition::{
     UnavailableGroupOrderSource,
 };
 
+/// Installs the process-level rustls crypto provider before anything opens a TLS connection.
+///
+/// Without this the app aborts a few seconds after launch on iOS:
+///
+/// ```text
+/// abort() called
+/// core::option::expect              <- could not determine the process-level CryptoProvider
+/// rustls::client::...
+/// tokio_tungstenite::...
+/// vrcx_0_outbound_...
+/// ```
+///
+/// `tokio-tungstenite` builds its own `rustls::ClientConfig` through `ClientConfig::builder()`, which
+/// needs a default provider. `Cargo.toml` enables `ring` for the workspace while tungstenite pulls
+/// rustls in with its default features, so *both* providers are compiled in - and rustls refuses to
+/// guess between them. `headless` installs `aws_lc_rs` for the same reason; the phone installs `ring`,
+/// which is the provider `mobile_tls_client_config` already uses for HTTPS.
+///
+/// Idempotent: an already-installed provider makes this return `Err`, which is ignored.
+fn install_tls_crypto_provider() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+}
 /// Builds the runtime host rooted at `app_data_dir`.
 ///
 /// `device_name` is what this installation reports to remote sync presence (`_sync_devices`). The
 /// phone used to pass an empty string - which the sync host treats as "hide it" - so the device list
 /// showed a bare id (or, worse, another machine's name on the row the two of them shared).
 pub fn build_host(app_data_dir: &Path, device_name: &str) -> Result<RuntimeHostState, String> {
+    install_tls_crypto_provider();
+
     // Kotlin hands over `Context.getFilesDir()`, but VRCX keeps its own folder inside the platform's
     // data directory - the desktop resolves `%APPDATA%\VRCX-0`, not `%APPDATA%`. Appending the same
     // name here makes the two layouts identical (database, image cache and secrets key all under

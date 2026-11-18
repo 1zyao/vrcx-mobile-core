@@ -10123,6 +10123,7 @@ dependencies = [
 name = "vrcx-0-mobile-core"
 version = "0.1.0"
 dependencies = [
+ "rustls",
  "serde",
  "serde_json",
  "tokio",
