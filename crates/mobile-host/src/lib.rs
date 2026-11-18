@@ -1223,6 +1223,36 @@ fn notification_chain_actions<'a>(
     ))
 }
 
+/// Hide a notification and expire it locally (`app__notification_hide_and_expire`).
+async fn app__notification_hide_and_expire(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<vrcx_0_application::social::NotificationHideExpireInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let media = vrcx_0_outbound_adapters::LocalMediaUploadAdapter::new(Arc::clone(state.web_client()));
+    let outcome = {
+        let actions = notification_chain_actions(&state, &media)?;
+        vrcx_0_application::social::hide_and_expire_notification(&actions, args.input)
+            .await
+            .map_err(|error| CommandError::failed(error.to_string()))?
+    };
+    serde_json::to_value(outcome).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+/// Respond to a notification, then expire it (`app__notification_respond_and_expire`).
+async fn app__notification_respond_and_expire(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<vrcx_0_application::social::NotificationRespondInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let media = vrcx_0_outbound_adapters::LocalMediaUploadAdapter::new(Arc::clone(state.web_client()));
+    let outcome = {
+        let actions = notification_chain_actions(&state, &media)?;
+        vrcx_0_application::social::respond_and_expire_notification(&actions, args.input)
+            .await
+            .map_err(|error| CommandError::failed(error.to_string()))?
+    };
+    serde_json::to_value(outcome).map_err(|error| CommandError::failed(error.to_string()))
+}
+
 /// Send an invite through the social notification chain (`app__notification_instance_invite_send`).
 ///
 /// This is the desktop's route for "invite this user to my instance": the chain sends the VRChat request
@@ -1676,6 +1706,24 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         "app__notification_request_invite_accept",
         app__notification_request_invite_accept,
     );
+    registry.register_typed::<
+        InputArgs<vrcx_0_application::social::NotificationHideExpireInput>,
+        serde_json::Value,
+        _,
+        _,
+    >(
+        "app__notification_hide_and_expire",
+        app__notification_hide_and_expire,
+    );
+    registry.register_typed::<
+        InputArgs<vrcx_0_application::social::NotificationRespondInput>,
+        serde_json::Value,
+        _,
+        _,
+    >(
+        "app__notification_respond_and_expire",
+        app__notification_respond_and_expire,
+    );
     registry.register_typed::<serde_json::Value, serde_json::Value, _, _>(
         "app__vrchat_instances_active_get",
         app__vrchat_instances_active_get,
@@ -2005,7 +2053,7 @@ mod tests {
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 85);
+        assert_eq!(registry.len(), 87);
     }
 }
 
