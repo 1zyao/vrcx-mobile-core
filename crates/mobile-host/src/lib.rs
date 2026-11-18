@@ -1197,6 +1197,104 @@ async fn app__vrchat_instances_discover_get(
         .map_err(|error| CommandError::failed(error.to_string()))?;
     serde_json::to_value(rows).map_err(|error| CommandError::failed(error.to_string()))
 }
+/// Invite shapes, copied from the desktop's `src-tauri/.../notifications/types.rs` and
+/// `.../tools/types.rs`: the frontend already speaks these names, so they travel unchanged.
+#[derive(serde::Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+struct VrchatRequestInviteSendInput {
+    #[serde(default)]
+    receiver_user_id: String,
+    params: vrcx_0_vrchat_protocol::notifications::RequestInviteRequest,
+}
+
+#[derive(serde::Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+struct VrchatInstanceSelfInviteInput {
+    world_id: String,
+    instance_id: String,
+    #[serde(default)]
+    short_name: String,
+}
+
+#[derive(serde::Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+struct VrchatToolsInviteMessagesInput {
+    current_user_id: String,
+    message_type: vrcx_0_vrchat_protocol::tools::InviteMessageType,
+}
+
+#[derive(serde::Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+struct VrchatToolsInviteMessageEditInput {
+    current_user_id: String,
+    message_type: vrcx_0_vrchat_protocol::tools::InviteMessageType,
+    slot: i32,
+    message: String,
+}
+
+/// `POST invite/{userId}` - ask someone to join the instance you are in
+/// (`app__vrchat_request_invite_send`).
+async fn app__vrchat_request_invite_send(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<VrchatRequestInviteSendInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let input = args.input;
+    let response = state
+        .vrchat_remote()
+        .request_invite(input.receiver_user_id, input.params)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+/// `POST instancedselfinvite/{location}` - invite yourself into a specific instance
+/// (`app__vrchat_instance_self_invite`).
+async fn app__vrchat_instance_self_invite(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<VrchatInstanceSelfInviteInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let input = args.input;
+    let response = state
+        .vrchat_remote()
+        .instance_self_invite(input.world_id, input.instance_id, input.short_name)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+/// `GET message/{userId}/{type}` - the invite-message slots (`app__vrchat_tools_invite_messages_get`).
+async fn app__vrchat_tools_invite_messages_get(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<VrchatToolsInviteMessagesInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let input = args.input;
+    let response = state
+        .vrchat_remote()
+        .invite_messages(input.current_user_id, input.message_type)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+/// `PUT message/{userId}/{type}/{slot}` (`app__vrchat_tools_invite_message_edit`).
+async fn app__vrchat_tools_invite_message_edit(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<VrchatToolsInviteMessageEditInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let input = args.input;
+    let response = state
+        .vrchat_remote()
+        .edit_invite_message(
+            input.current_user_id,
+            input.message_type,
+            input.slot,
+            input.message,
+        )
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
 
 /// Flat arguments, matching how the desktop command is called (`appWorldRecentFriendCounts(worldIds)`).
 #[derive(serde::Deserialize, specta::Type)]
@@ -1409,6 +1507,22 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
     registry.register_typed::<InputArgs<InstanceIdentityInput>, serde_json::Value, _, _>(
         "app__vrchat_instance_get",
         app__vrchat_instance_get,
+    );
+    registry.register_typed::<InputArgs<VrchatRequestInviteSendInput>, serde_json::Value, _, _>(
+        "app__vrchat_request_invite_send",
+        app__vrchat_request_invite_send,
+    );
+    registry.register_typed::<InputArgs<VrchatInstanceSelfInviteInput>, serde_json::Value, _, _>(
+        "app__vrchat_instance_self_invite",
+        app__vrchat_instance_self_invite,
+    );
+    registry.register_typed::<InputArgs<VrchatToolsInviteMessagesInput>, serde_json::Value, _, _>(
+        "app__vrchat_tools_invite_messages_get",
+        app__vrchat_tools_invite_messages_get,
+    );
+    registry.register_typed::<InputArgs<VrchatToolsInviteMessageEditInput>, serde_json::Value, _, _>(
+        "app__vrchat_tools_invite_message_edit",
+        app__vrchat_tools_invite_message_edit,
     );
     registry.register_typed::<serde_json::Value, serde_json::Value, _, _>(
         "app__vrchat_instances_active_get",
@@ -1739,7 +1853,7 @@ mod tests {
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 75);
+        assert_eq!(registry.len(), 79);
     }
 }
 
