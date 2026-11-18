@@ -1223,6 +1223,34 @@ fn notification_chain_actions<'a>(
     ))
 }
 
+/// Flat args, matching the desktop's `app__notification_v2_expire(userId, id)`.
+#[derive(serde::Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+struct NotificationExpireArgs {
+    user_id: String,
+    id: String,
+}
+
+/// Expire a legacy-table notification locally (`app__notification_v2_expire`).
+///
+/// The desktop reaches this through `local_data()`; the phone has no such runtime, so it calls the same
+/// persistence function the runtime would have called. Local only - no VRChat request - which is why
+/// hiding a notification through the chain and expiring it afterwards are separate commands upstream.
+async fn app__notification_v2_expire(
+    state: Arc<RuntimeHostState>,
+    args: NotificationExpireArgs,
+) -> Result<serde_json::Value, CommandError> {
+    let db = Arc::clone(state.database());
+    let NotificationExpireArgs { user_id, id } = args;
+    tokio::task::spawn_blocking(move || {
+        vrcx_0_persistence::notifications::notification_v2_expire(&db, user_id, id)
+    })
+    .await
+    .map_err(|error| CommandError::failed(format!("notification expire task failed: {error}")))?
+    .map_err(|error| CommandError::failed(error.to_string()))?;
+    Ok(serde_json::Value::Null)
+}
+
 /// Hide a notification and expire it locally (`app__notification_hide_and_expire`).
 async fn app__notification_hide_and_expire(
     state: Arc<RuntimeHostState>,
@@ -1715,6 +1743,10 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         "app__notification_hide_and_expire",
         app__notification_hide_and_expire,
     );
+    registry.register_typed::<NotificationExpireArgs, serde_json::Value, _, _>(
+        "app__notification_v2_expire",
+        app__notification_v2_expire,
+    );
     registry.register_typed::<
         InputArgs<vrcx_0_application::social::NotificationRespondInput>,
         serde_json::Value,
@@ -2053,7 +2085,7 @@ mod tests {
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 87);
+        assert_eq!(registry.len(), 88);
     }
 }
 
