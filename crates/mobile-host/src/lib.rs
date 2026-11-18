@@ -1169,6 +1169,44 @@ async fn app__vrchat_instance_get(
     serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
 }
 
+#[derive(serde::Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+struct VrchatMediaIdInput {
+    file_id: String,
+}
+
+/// `DELETE file/{fileId}` (`app__vrchat_media_file_delete`).
+async fn app__vrchat_media_file_delete(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<VrchatMediaIdInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let response = state
+        .vrchat_remote()
+        .delete_media_file(args.input.file_id)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+#[derive(serde::Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+struct VrchatPrintIdInput {
+    print_id: String,
+}
+
+/// `DELETE prints/{printId}` (`app__vrchat_media_print_delete`).
+async fn app__vrchat_media_print_delete(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<VrchatPrintIdInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let response = state
+        .vrchat_remote()
+        .delete_print(args.input.print_id)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
 /// The 探索 tab of the search page: `GET instances/active` (`app__vrchat_instances_active_get`).
 ///
 /// Upstream does the paging itself (a request pacer and a page cap live in the facade), so this is a
@@ -1853,6 +1891,14 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         "app__vrchat_media_files_get",
         app__vrchat_media_files_get,
     );
+    registry.register_typed::<InputArgs<VrchatMediaIdInput>, serde_json::Value, _, _>(
+        "app__vrchat_media_file_delete",
+        app__vrchat_media_file_delete,
+    );
+    registry.register_typed::<InputArgs<VrchatPrintIdInput>, serde_json::Value, _, _>(
+        "app__vrchat_media_print_delete",
+        app__vrchat_media_print_delete,
+    );
     registry.register_typed::<InputArgs<PrintsArgs>, serde_json::Value, _, _>(
         "app__vrchat_media_prints_get",
         app__vrchat_media_prints_get,
@@ -2085,7 +2131,7 @@ mod tests {
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 88);
+        assert_eq!(registry.len(), 90);
     }
 }
 
