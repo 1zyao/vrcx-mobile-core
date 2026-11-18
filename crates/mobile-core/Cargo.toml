@@ -5,9 +5,18 @@ edition = "2021"
 license.workspace = true
 description = "In-process core for the phone app: host state plus the loopback command bus"
 
+# The probe is a desktop tool that serves the command bus against a data directory. It must not be built
+# for iOS: a binary has to be linked, and linking an Apple target from Rust needs clang builtins that are
+# not reachable - which broke the iOS CI even though the library itself compiled fine. Gated behind a
+# feature so a normal build (and any iOS build) simply does not see it.
 [[bin]]
 name = "vrcx-0-mobile-probe"
 path = "src/bin/probe.rs"
+required-features = ["probe"]
+
+[features]
+default = []
+probe = []
 
 [lib]
 crate-type = ["staticlib", "rlib"]
