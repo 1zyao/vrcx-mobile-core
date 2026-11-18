@@ -132,3 +132,52 @@ pub async fn avatar_get(state: &RuntimeHostState, avatar_id: String) -> Result<V
     )?;
     run(state, "app__avatar_get", format!("Getting avatar {avatar_id}."), request).await
 }
+
+/// `GET auth/user/avatarmoderations` (`app__vrchat_avatar_moderations_get`).
+///
+/// Avatar moderation has no `avatars()` accessor on the host, and no facade method, so these three go
+/// through the facade's public `execute` the same way the nine reads above do - the protocol builders
+/// already exist upstream.
+pub async fn avatar_moderations_get(
+    state: &RuntimeHostState,
+) -> Result<VrchatResponse> {
+    let request =
+        vrcx_0_vrchat_protocol::avatars::avatar_moderations_get_input(VRCHAT_API_DEFAULT_ENDPOINT.into());
+    run(state, "app__vrchat_avatar_moderations_get", "Getting avatar moderations.".to_string(), request).await
+}
+
+/// `POST auth/user/avatarmoderations` (`app__vrchat_avatar_moderation_send`).
+pub async fn avatar_moderation_send(
+    state: &RuntimeHostState,
+    avatar_id: String,
+) -> Result<VrchatResponse> {
+    let (avatar_id, request) = vrcx_0_vrchat_protocol::avatars::avatar_moderation_send_input(
+        VRCHAT_API_DEFAULT_ENDPOINT.into(),
+        avatar_id,
+    )?;
+    run(
+        state,
+        "app__vrchat_avatar_moderation_send",
+        format!("Blocking avatar {avatar_id}."),
+        request,
+    )
+    .await
+}
+
+/// `DELETE auth/user/avatarmoderations` (`app__vrchat_avatar_moderation_delete`).
+pub async fn avatar_moderation_delete(
+    state: &RuntimeHostState,
+    avatar_id: String,
+) -> Result<VrchatResponse> {
+    let (avatar_id, request) = vrcx_0_vrchat_protocol::avatars::avatar_moderation_delete_input(
+        VRCHAT_API_DEFAULT_ENDPOINT.into(),
+        avatar_id,
+    )?;
+    run(
+        state,
+        "app__vrchat_avatar_moderation_delete",
+        format!("Unblocking avatar {avatar_id}."),
+        request,
+    )
+    .await
+}

@@ -1370,6 +1370,45 @@ async fn app__vrchat_tools_invite_message_edit(
 }
 
 
+#[derive(serde::Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+struct VrchatAvatarModerationInput {
+    avatar_id: String,
+}
+
+/// `GET auth/user/avatarmoderations` (`app__vrchat_avatar_moderations_get`).
+async fn app__vrchat_avatar_moderations_get(
+    state: Arc<RuntimeHostState>,
+    _args: serde_json::Value,
+) -> Result<serde_json::Value, CommandError> {
+    let response = vrchat_calls::avatar_moderations_get(&state)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+/// `POST auth/user/avatarmoderations` (`app__vrchat_avatar_moderation_send`).
+async fn app__vrchat_avatar_moderation_send(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<VrchatAvatarModerationInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let response = vrchat_calls::avatar_moderation_send(&state, args.input.avatar_id)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+/// `DELETE auth/user/avatarmoderations` (`app__vrchat_avatar_moderation_delete`).
+async fn app__vrchat_avatar_moderation_delete(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<VrchatAvatarModerationInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let response = vrchat_calls::avatar_moderation_delete(&state, args.input.avatar_id)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
 /// Flat arguments, matching how the desktop command is called (`appWorldRecentFriendCounts(worldIds)`).
 #[derive(serde::Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
@@ -1597,6 +1636,18 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
     registry.register_typed::<InputArgs<VrchatToolsInviteMessageEditInput>, serde_json::Value, _, _>(
         "app__vrchat_tools_invite_message_edit",
         app__vrchat_tools_invite_message_edit,
+    );
+    registry.register_typed::<serde_json::Value, serde_json::Value, _, _>(
+        "app__vrchat_avatar_moderations_get",
+        app__vrchat_avatar_moderations_get,
+    );
+    registry.register_typed::<InputArgs<VrchatAvatarModerationInput>, serde_json::Value, _, _>(
+        "app__vrchat_avatar_moderation_send",
+        app__vrchat_avatar_moderation_send,
+    );
+    registry.register_typed::<InputArgs<VrchatAvatarModerationInput>, serde_json::Value, _, _>(
+        "app__vrchat_avatar_moderation_delete",
+        app__vrchat_avatar_moderation_delete,
     );
     registry.register_typed::<
         InputArgs<vrcx_0_application::social::NotificationInstanceInviteInput>,
@@ -1954,7 +2005,7 @@ mod tests {
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 82);
+        assert_eq!(registry.len(), 85);
     }
 }
 
