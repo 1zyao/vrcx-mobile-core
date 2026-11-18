@@ -228,3 +228,80 @@ pub async fn world_save(
         vrcx_0_vrchat_protocol::worlds::world_save_input(VRCHAT_API_DEFAULT_ENDPOINT.into(), world_id, params)?;
     run(state, "app__vrchat_world_save", format!("Saving world {world_id}."), request).await
 }
+/// `POST users/{id}/boop` (`app__vrchat_boop_send`).
+pub async fn boop_send(
+    state: &RuntimeHostState,
+    user_id: String,
+    emoji_id: String,
+    inventory_item_id: String,
+) -> Result<VrchatResponse> {
+    let (user_id, request) = vrcx_0_vrchat_protocol::notifications::boop_send_input(
+        VRCHAT_API_DEFAULT_ENDPOINT.into(),
+        user_id,
+        emoji_id,
+        inventory_item_id,
+    )?;
+    run(state, "app__vrchat_boop_send", format!("Booping {user_id}."), request).await
+}
+
+/// `POST user/{id}/note` (`app__vrchat_tools_user_note_save`).
+pub async fn user_note_save(
+    state: &RuntimeHostState,
+    target_user_id: String,
+    note: String,
+) -> Result<VrchatResponse> {
+    let (target_user_id, request) = vrcx_0_vrchat_protocol::tools::user_note_save_input(
+        VRCHAT_API_DEFAULT_ENDPOINT.into(),
+        target_user_id,
+        note,
+    )?;
+    run(
+        state,
+        "app__vrchat_tools_user_note_save",
+        format!("Saving note for {target_user_id}."),
+        request,
+    )
+    .await
+}
+
+/// `GET users/{userId}/{worldId}/persist/exists` (`app__vrchat_world_persistent_data_exists`).
+pub async fn world_persistent_data_exists(
+    state: &RuntimeHostState,
+    user_id: String,
+    world_id: String,
+) -> Result<VrchatResponse> {
+    let (user_id, world_id, request) =
+        vrcx_0_vrchat_protocol::worlds::world_persistent_data_exists_input(
+            VRCHAT_API_DEFAULT_ENDPOINT.into(),
+            user_id,
+            world_id,
+        )?;
+    run(
+        state,
+        "app__vrchat_world_persistent_data_exists",
+        format!("Checking persistence for {user_id} in {world_id}."),
+        request,
+    )
+    .await
+}
+
+/// `DELETE users/{userId}/{worldId}/persist` (`app__vrchat_world_persistent_data_delete`).
+pub async fn world_persistent_data_delete(
+    state: &RuntimeHostState,
+    user_id: String,
+    world_id: String,
+) -> Result<VrchatResponse> {
+    let (user_id, world_id, request) =
+        vrcx_0_vrchat_protocol::worlds::world_persistent_data_delete_input(
+            VRCHAT_API_DEFAULT_ENDPOINT.into(),
+            user_id,
+            world_id,
+        )?;
+    run(
+        state,
+        "app__vrchat_world_persistent_data_delete",
+        format!("Deleting persistence for {user_id} in {world_id}."),
+        request,
+    )
+    .await
+}

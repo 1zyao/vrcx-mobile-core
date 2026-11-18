@@ -1327,6 +1327,82 @@ async fn app__vrchat_world_save(
     serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
 }
 
+#[derive(serde::Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+struct VrchatBoopSendInput {
+    user_id: String,
+    #[serde(default)]
+    emoji_id: String,
+    #[serde(default)]
+    inventory_item_id: String,
+}
+
+#[derive(serde::Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+struct VrchatUserNoteSaveInput {
+    target_user_id: String,
+    #[serde(default)]
+    note: String,
+}
+
+#[derive(serde::Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+struct VrchatWorldPersistentDataInput {
+    user_id: String,
+    world_id: String,
+}
+
+/// `POST users/{id}/boop` (`app__vrchat_boop_send`).
+async fn app__vrchat_boop_send(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<VrchatBoopSendInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let response = vrchat_calls::boop_send(
+        &state,
+        args.input.user_id,
+        args.input.emoji_id,
+        args.input.inventory_item_id,
+    )
+    .await
+    .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+/// `POST user/{id}/note` (`app__vrchat_tools_user_note_save`).
+async fn app__vrchat_tools_user_note_save(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<VrchatUserNoteSaveInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let response = vrchat_calls::user_note_save(&state, args.input.target_user_id, args.input.note)
+        .await
+        .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+/// `GET users/{userId}/{worldId}/persist/exists` (`app__vrchat_world_persistent_data_exists`).
+async fn app__vrchat_world_persistent_data_exists(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<VrchatWorldPersistentDataInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let response =
+        vrchat_calls::world_persistent_data_exists(&state, args.input.user_id, args.input.world_id)
+            .await
+            .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
+/// `DELETE users/{userId}/{worldId}/persist` (`app__vrchat_world_persistent_data_delete`).
+async fn app__vrchat_world_persistent_data_delete(
+    state: Arc<RuntimeHostState>,
+    args: InputArgs<VrchatWorldPersistentDataInput>,
+) -> Result<serde_json::Value, CommandError> {
+    let response =
+        vrchat_calls::world_persistent_data_delete(&state, args.input.user_id, args.input.world_id)
+            .await
+            .map_err(|error| CommandError::failed(error.to_string()))?;
+    serde_json::to_value(response).map_err(|error| CommandError::failed(error.to_string()))
+}
+
 /// The 探索 tab of the search page: `GET instances/active` (`app__vrchat_instances_active_get`).
 ///
 /// Upstream does the paging itself (a request pacer and a page cap live in the facade), so this is a
@@ -2052,6 +2128,32 @@ pub fn build_registry() -> CommandRegistry<RuntimeHostState> {
         "app__vrchat_world_save",
         app__vrchat_world_save,
     );
+    registry.register_typed::<InputArgs<VrchatBoopSendInput>, serde_json::Value, _, _>(
+        "app__vrchat_boop_send",
+        app__vrchat_boop_send,
+    );
+    registry.register_typed::<InputArgs<VrchatUserNoteSaveInput>, serde_json::Value, _, _>(
+        "app__vrchat_tools_user_note_save",
+        app__vrchat_tools_user_note_save,
+    );
+    registry.register_typed::<
+        InputArgs<VrchatWorldPersistentDataInput>,
+        serde_json::Value,
+        _,
+        _,
+    >(
+        "app__vrchat_world_persistent_data_exists",
+        app__vrchat_world_persistent_data_exists,
+    );
+    registry.register_typed::<
+        InputArgs<VrchatWorldPersistentDataInput>,
+        serde_json::Value,
+        _,
+        _,
+    >(
+        "app__vrchat_world_persistent_data_delete",
+        app__vrchat_world_persistent_data_delete,
+    );
     registry.register_typed::<InputArgs<PrintsArgs>, serde_json::Value, _, _>(
         "app__vrchat_media_prints_get",
         app__vrchat_media_prints_get,
@@ -2284,7 +2386,7 @@ mod tests {
         ] {
             assert!(registry.contains(name), "missing command: {name}");
         }
-        assert_eq!(registry.len(), 97);
+        assert_eq!(registry.len(), 101);
     }
 }
 
